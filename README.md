@@ -34,7 +34,6 @@
   <img src="./preview/img_3.png" width="400" alt="Tela de configuração de candidatos" />
   <img src="./preview/img_2.png" width="400" alt="Pintura manual de municípios" />
 </p>
-<p><em>(Adicione suas próprias imagens na pasta <code>./preview/</code> para visualização)</em></p>
 
 <hr />
 <p>Desenvolvido como ferramenta de simulação eleitoral - Contribuições são bem-vindas!</p>
