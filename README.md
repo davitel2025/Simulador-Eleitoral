@@ -34,6 +34,8 @@
   <img src="./preview/img_3.png" width="400" alt="Tela de configuração de candidatos" />
   <img src="./preview/img_2.png" width="400" alt="Pintura manual de municípios" />
 </p>
+##Acesse o projeto online
+👉 https://davitel2025.github.io/Simulador-Eleitoral/
 
 <hr />
 <p>Desenvolvido como ferramenta de simulação eleitoral - Contribuições são bem-vindas!</p>
