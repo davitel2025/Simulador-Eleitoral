@@ -10,14 +10,15 @@ import {
   getWinner,
   normalizeVotesForCandidates,
 } from "../../lib/utils";
-import type {
-  AnalyticsTab,
-  Candidate,
-  CandidateId,
-  ElectionRound,
-  PathData,
-  RegionName,
+import type { 
+  AnalyticsTab, 
+  Candidate, 
+  CandidateId, 
+  ElectionRound, 
+  PathData, 
+  RegionName, 
   StateResult,
+  PoliticalScenario   // <-- ADICIONE ESTE
 } from "../../types";
 import { CandidateManager } from "../CandidateManager";
 import { StateActionModal } from "../modals/StateActionModal";
@@ -27,11 +28,18 @@ import { StatePhotoModal } from "../modals/StatePhotoModal";
 import { NationalPhotoModal } from "../modals/NationalPhotoModal";
 import { RegionalPhotoModal } from "../modals/RegionalPhotoModal";
 
-export function ElectionSimulator({ round, candidates, onCandidatesChange, onRestart }: {
+export function ElectionSimulator({ 
+  round, 
+  candidates, 
+  onCandidatesChange, 
+  onRestart, 
+  loadedScenario 
+}: { 
   round: ElectionRound;
   candidates: Candidate[];
   onCandidatesChange: (candidates: Candidate[]) => void;
   onRestart: () => void;
+  loadedScenario?: PoliticalScenario | null;  // <-- ADICIONE ESTA LINHA
 }) {
   const [results, setResults] = useState<Record<string, StateResult>>({});
   const [paths, setPaths] = useState<PathData[]>([]);
@@ -47,6 +55,44 @@ export function ElectionSimulator({ round, candidates, onCandidatesChange, onRes
   const [neonStates, setNeonStates] = useState(true);
   const [nationalPhotoScale, setNationalPhotoScale] = useState(1.45);
   const [photoMapScale, setPhotoMapScale] = useState(520);
+  useEffect(() => {
+  if (!loadedScenario?.results) return;
+  
+  const candidateIds = candidates.map(c => c.id);
+  if (candidateIds.length === 0) return;
+
+  const newResults: Record<string, StateResult> = {};
+  
+  for (const [uf, candidatePcts] of Object.entries(loadedScenario.results)) {
+    // Converte os percentuais do cenário (indexado por posição do candidato) para o formato com candidateId
+    const votes: Record<CandidateId, number> = {};
+    for (let i = 0; i < candidateIds.length; i++) {
+      const candidateId = candidateIds[i];
+      const pct = candidatePcts[i + 1]; // candidatePcts é {1: pct1, 2: pct2}
+      if (pct !== undefined) {
+        votes[candidateId] = pct;
+      }
+    }
+    // Normaliza para garantir soma 100
+    const total = Object.values(votes).reduce((sum, v) => sum + v, 0);
+    if (total > 0) {
+      Object.keys(votes).forEach(id => {
+        votes[Number(id)] = (votes[Number(id)] / total) * 100;
+      });
+    }
+    
+    newResults[uf] = {
+      uf,
+      votes,
+      winner: getWinner(votes),
+      usesMunicipalities: false,
+      municipalities: {},
+      municipalityPaint: {},
+    };
+  }
+  
+  setResults(newResults);
+}, [loadedScenario, candidates]); // Depende do cenário e dos candidatos
   const importRef = useRef<HTMLInputElement>(null);
 
   const [mapZoom, setMapZoom] = useState(1);
@@ -97,28 +143,37 @@ export function ElectionSimulator({ round, candidates, onCandidatesChange, onRes
   }, [candidates]);
 
   const national = useMemo(() => {
-    const candidateVotes: Record<CandidateId, number> = {};
-    candidates.forEach((c) => { candidateVotes[c.id] = 0; });
-    let totalVoters = 0;
-    let statesCounted = 0;
-    for (const state of STATES) {
-      const result = results[state.uf];
-      if (!result) continue;
-      statesCounted += 1;
-      totalVoters += state.voters;
-      Object.entries(result.votes).forEach(([candidateId, pct]) => {
-        const id = Number(candidateId);
-        candidateVotes[id] = (candidateVotes[id] || 0) + (pct / 100) * state.voters;
-      });
-    }
-    const totalVotes = Object.values(candidateVotes).reduce((sum, v) => sum + v, 0);
-    const candidatePcts: Record<CandidateId, number> = {};
-    Object.keys(candidateVotes).forEach((id) => {
-      const numId = Number(id);
-      candidatePcts[numId] = totalVotes > 0 ? (candidateVotes[numId] / totalVotes) * 100 : 0;
+  const candidateVotes: Record<CandidateId, number> = {};
+  candidates.forEach((c) => { candidateVotes[c.id] = 0; });
+  let totalVoters = 0;
+  let statesCounted = 0;
+
+  // Determina qual campo de eleitores usar baseado no ano do cenário carregado
+  const getVotersForState = (state: StateInfo): number => {
+    if (loadedScenario?.year === 2018) return state.voters2018;
+    if (loadedScenario?.year === 2022) return state.voters2022;
+    return state.voters; // 2026 ou fallback
+  };
+
+  for (const state of STATES) {
+    const result = results[state.uf];
+    if (!result) continue;
+    statesCounted += 1;
+    const votersCount = getVotersForState(state);
+    totalVoters += votersCount;
+    Object.entries(result.votes).forEach(([candidateId, pct]) => {
+      const id = Number(candidateId);
+      candidateVotes[id] = (candidateVotes[id] || 0) + (pct / 100) * votersCount;
     });
-    return { candidateVotes, candidatePcts, totalVotes, totalVoters, statesCounted, winner: getWinner(candidatePcts) };
-  }, [results, candidates]);
+  }
+  const totalVotes = Object.values(candidateVotes).reduce((sum, v) => sum + v, 0);
+  const candidatePcts: Record<CandidateId, number> = {};
+  Object.keys(candidateVotes).forEach((id) => {
+    const numId = Number(id);
+    candidatePcts[numId] = totalVotes > 0 ? (candidateVotes[numId] / totalVotes) * 100 : 0;
+  });
+  return { candidateVotes, candidatePcts, totalVotes, totalVoters, statesCounted, winner: getWinner(candidatePcts) };
+}, [results, candidates, loadedScenario]);
 
   const candidateById = useMemo(() => {
     return Object.fromEntries(candidates.map((c) => [c.id, c]));

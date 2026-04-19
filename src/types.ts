@@ -12,14 +12,16 @@ export interface Candidate {
   photo?: string;
   vicePhoto?: string;
   partyLogo?: string;
-  ideology?: string; // NOVO CAMPO
+  ideology?: string;
 }
 
 export interface StateInfo {
   uf: string;
   name: string;
   region: RegionName;
-  voters: number;
+  voters: number; // voters padrão (2026)
+  voters2018: number; // eleitorado real de 2018
+  voters2022: number; // eleitorado real de 2022
   ibgeCode: string;
 }
 
@@ -35,6 +37,7 @@ export interface StateResult {
 export interface PathData {
   uf: string;
   d: string;
+  centroid: [number, number];
 }
 
 export interface MunicipalityPath {
@@ -54,12 +57,11 @@ export interface RankedItem {
   votes?: number;
 }
 
-// NOVO: Interface para cenários políticos
 export interface PoliticalScenario {
   id: string;
   name: string;
   year: number;
   description: string;
   candidates: Omit<Candidate, 'id'>[];
-  results?: Record<string, Record<number, number>>; // uf -> candidateId -> percentage
+  results?: Record<string, Record<number, number>>;
 }
