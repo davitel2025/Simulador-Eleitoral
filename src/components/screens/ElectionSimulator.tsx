@@ -10,15 +10,15 @@ import {
   getWinner,
   normalizeVotesForCandidates,
 } from "../../lib/utils";
-import type { 
-  AnalyticsTab, 
-  Candidate, 
-  CandidateId, 
-  ElectionRound, 
-  PathData, 
-  RegionName, 
+import type {
+  Candidate,
+  CandidateId,
+  ElectionRound,
+  PathData,
+  RegionName,
+  StateInfo,
   StateResult,
-  PoliticalScenario   // <-- ADICIONE ESTE
+  PoliticalScenario,
 } from "../../types";
 import { CandidateManager } from "../CandidateManager";
 import { StateActionModal } from "../modals/StateActionModal";
@@ -28,18 +28,41 @@ import { StatePhotoModal } from "../modals/StatePhotoModal";
 import { NationalPhotoModal } from "../modals/NationalPhotoModal";
 import { RegionalPhotoModal } from "../modals/RegionalPhotoModal";
 
-export function ElectionSimulator({ 
-  round, 
-  candidates, 
-  onCandidatesChange, 
-  onRestart, 
-  loadedScenario 
-}: { 
+type AnalyticsTab = "regioes" | "desempenho" | "ranking" | "candidatos";
+
+// Helper to get voters count for a state based on scenario
+function getVotersForState(state: StateInfo, scenario?: PoliticalScenario | null): number {
+  // Custom scenario with explicit per-state voters
+  if (scenario?.customStates) {
+    const custom = scenario.customStates.find(cs => cs.uf === state.uf);
+    if (custom) return custom.voters;
+  }
+  if (scenario?.year === 2018) return state.voters2018;
+  if (scenario?.year === 2022) return state.voters2022;
+  return state.voters;
+}
+
+// Which states are active in this scenario
+function getActiveStates(scenario?: PoliticalScenario | null): StateInfo[] {
+  if (scenario?.customStates) {
+    const ufs = new Set(scenario.customStates.map(cs => cs.uf));
+    return STATES.filter(s => ufs.has(s.uf));
+  }
+  return STATES;
+}
+
+export function ElectionSimulator({
+  round,
+  candidates,
+  onCandidatesChange,
+  onRestart,
+  loadedScenario,
+}: {
   round: ElectionRound;
   candidates: Candidate[];
   onCandidatesChange: (candidates: Candidate[]) => void;
   onRestart: () => void;
-  loadedScenario?: PoliticalScenario | null;  // <-- ADICIONE ESTA LINHA
+  loadedScenario?: PoliticalScenario | null;
 }) {
   const [results, setResults] = useState<Record<string, StateResult>>({});
   const [paths, setPaths] = useState<PathData[]>([]);
@@ -55,49 +78,45 @@ export function ElectionSimulator({
   const [neonStates, setNeonStates] = useState(true);
   const [nationalPhotoScale, setNationalPhotoScale] = useState(1.45);
   const [photoMapScale, setPhotoMapScale] = useState(520);
-  useEffect(() => {
-  if (!loadedScenario?.results) return;
-  
-  const candidateIds = candidates.map(c => c.id);
-  if (candidateIds.length === 0) return;
 
-  const newResults: Record<string, StateResult> = {};
-  
-  for (const [uf, candidatePcts] of Object.entries(loadedScenario.results)) {
-    // Converte os percentuais do cenário (indexado por posição do candidato) para o formato com candidateId
-    const votes: Record<CandidateId, number> = {};
-    for (let i = 0; i < candidateIds.length; i++) {
-      const candidateId = candidateIds[i];
-      const pct = candidatePcts[i + 1]; // candidatePcts é {1: pct1, 2: pct2}
-      if (pct !== undefined) {
-        votes[candidateId] = pct;
-      }
-    }
-    // Normaliza para garantir soma 100
-    const total = Object.values(votes).reduce((sum, v) => sum + v, 0);
-    if (total > 0) {
-      Object.keys(votes).forEach(id => {
-        votes[Number(id)] = (votes[Number(id)] / total) * 100;
-      });
-    }
-    
-    newResults[uf] = {
-      uf,
-      votes,
-      winner: getWinner(votes),
-      usesMunicipalities: false,
-      municipalities: {},
-      municipalityPaint: {},
-    };
-  }
-  
-  setResults(newResults);
-}, [loadedScenario, candidates]); // Depende do cenário e dos candidatos
   const importRef = useRef<HTMLInputElement>(null);
-
   const [mapZoom, setMapZoom] = useState(1);
   const [mapOffset, setMapOffset] = useState({ x: 0, y: 0 });
   const mapContainerRef = useRef<HTMLDivElement>(null);
+
+  const activeStates = useMemo(() => getActiveStates(loadedScenario), [loadedScenario]);
+
+  // Load scenario results
+  useEffect(() => {
+    if (!loadedScenario?.results) return;
+    const candidateIds = candidates.map(c => c.id);
+    if (candidateIds.length === 0) return;
+
+    const newResults: Record<string, StateResult> = {};
+    for (const [uf, candidatePcts] of Object.entries(loadedScenario.results)) {
+      const votes: Record<CandidateId, number> = {};
+      for (let i = 0; i < candidateIds.length; i++) {
+        const candidateId = candidateIds[i];
+        const pct = candidatePcts[i + 1];
+        if (pct !== undefined) votes[candidateId] = pct;
+      }
+      const total = Object.values(votes).reduce((sum, v) => sum + v, 0);
+      if (total > 0) {
+        Object.keys(votes).forEach(id => {
+          votes[Number(id)] = (votes[Number(id)] / total) * 100;
+        });
+      }
+      newResults[uf] = {
+        uf,
+        votes,
+        winner: getWinner(votes),
+        usesMunicipalities: false,
+        municipalities: {},
+        municipalityPaint: {},
+      };
+    }
+    setResults(newResults);
+  }, [loadedScenario, candidates]);
 
   useEffect(() => {
     const loadMap = async () => {
@@ -142,44 +161,40 @@ export function ElectionSimulator({
     });
   }, [candidates]);
 
+  // National totals — only counting non-excluded states
   const national = useMemo(() => {
-  const candidateVotes: Record<CandidateId, number> = {};
-  candidates.forEach((c) => { candidateVotes[c.id] = 0; });
-  let totalVoters = 0;
-  let statesCounted = 0;
+    const candidateVotes: Record<CandidateId, number> = {};
+    candidates.forEach((c) => { candidateVotes[c.id] = 0; });
+    let totalVoters = 0;
+    let statesCounted = 0;
 
-  // Determina qual campo de eleitores usar baseado no ano do cenário carregado
-  const getVotersForState = (state: StateInfo): number => {
-    if (loadedScenario?.year === 2018) return state.voters2018;
-    if (loadedScenario?.year === 2022) return state.voters2022;
-    return state.voters; // 2026 ou fallback
-  };
-
-  for (const state of STATES) {
-    const result = results[state.uf];
-    if (!result) continue;
-    statesCounted += 1;
-    const votersCount = getVotersForState(state);
-    totalVoters += votersCount;
-    Object.entries(result.votes).forEach(([candidateId, pct]) => {
-      const id = Number(candidateId);
-      candidateVotes[id] = (candidateVotes[id] || 0) + (pct / 100) * votersCount;
+    for (const state of activeStates) {
+      const result = results[state.uf];
+      if (!result || result.excluded) continue;
+      statesCounted += 1;
+      const votersCount = getVotersForState(state, loadedScenario);
+      totalVoters += votersCount;
+      Object.entries(result.votes).forEach(([candidateId, pct]) => {
+        const id = Number(candidateId);
+        candidateVotes[id] = (candidateVotes[id] || 0) + (pct / 100) * votersCount;
+      });
+    }
+    const totalVotes = Object.values(candidateVotes).reduce((sum, v) => sum + v, 0);
+    const candidatePcts: Record<CandidateId, number> = {};
+    Object.keys(candidateVotes).forEach((id) => {
+      const numId = Number(id);
+      candidatePcts[numId] = totalVotes > 0 ? (candidateVotes[numId] / totalVotes) * 100 : 0;
     });
-  }
-  const totalVotes = Object.values(candidateVotes).reduce((sum, v) => sum + v, 0);
-  const candidatePcts: Record<CandidateId, number> = {};
-  Object.keys(candidateVotes).forEach((id) => {
-    const numId = Number(id);
-    candidatePcts[numId] = totalVotes > 0 ? (candidateVotes[numId] / totalVotes) * 100 : 0;
-  });
-  return { candidateVotes, candidatePcts, totalVotes, totalVoters, statesCounted, winner: getWinner(candidatePcts) };
-}, [results, candidates, loadedScenario]);
+    return { candidateVotes, candidatePcts, totalVotes, totalVoters, statesCounted, winner: getWinner(candidatePcts) };
+  }, [results, candidates, loadedScenario, activeStates]);
 
-  const candidateById = useMemo(() => {
-    return Object.fromEntries(candidates.map((c) => [c.id, c]));
-  }, [candidates]);
+  const candidateById = useMemo(() => Object.fromEntries(candidates.map((c) => [c.id, c])), [candidates]);
 
   const getStateFill = (uf: string): string => {
+    // Dim inactive states
+    if (activeStates.length < STATES.length && !activeStates.find(s => s.uf === uf)) {
+      return "#0f172a";
+    }
     const result = results[uf];
     if (!result || !result.winner) return "#1e293b";
     const winnerPct = result.votes[result.winner] || 0;
@@ -226,6 +241,15 @@ export function ElectionSimulator({
     setStateDialog(null);
   };
 
+  // Reset a single state's result
+  const handleResetState = (uf: string) => {
+    setResults((prev) => {
+      const next = { ...prev };
+      delete next[uf];
+      return next;
+    });
+  };
+
   const handleExport = () => {
     const payload = { round, candidates, results, generatedAt: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
@@ -263,7 +287,7 @@ export function ElectionSimulator({
           setResults(normalized);
         }
       } catch {
-        alert("Arquivo invalido. Certifique-se de importar um JSON exportado pelo simulador.");
+        alert("Arquivo inválido. Certifique-se de importar um JSON exportado pelo simulador.");
       }
     };
     reader.readAsText(file);
@@ -285,11 +309,9 @@ export function ElectionSimulator({
   const performanceStats = useMemo(() => {
     const candidateWins: Record<CandidateId, number> = {};
     candidates.forEach((c) => { candidateWins[c.id] = 0; });
-    const allResults = Object.values(results);
+    const allResults = Object.values(results).filter(r => !r.excluded);
     allResults.forEach((result) => {
-      if (result.winner) {
-        candidateWins[result.winner] = (candidateWins[result.winner] || 0) + 1;
-      }
+      if (result.winner) candidateWins[result.winner] = (candidateWins[result.winner] || 0) + 1;
     });
     const averageMargin = allResults.length === 0 ? 0 :
       allResults.reduce((sum, result) => {
@@ -301,22 +323,21 @@ export function ElectionSimulator({
 
   const regionalStats = useMemo(() => {
     const grouped = new Map<RegionName, { votes: Record<CandidateId, number>; wins: Record<CandidateId, number>; statesCounted: number }>();
-    for (const state of STATES) {
+    for (const state of activeStates) {
       const current = grouped.get(state.region) ?? { votes: {}, wins: {}, statesCounted: 0 };
       candidates.forEach((c) => {
         if (!current.votes[c.id]) current.votes[c.id] = 0;
         if (!current.wins[c.id]) current.wins[c.id] = 0;
       });
       const result = results[state.uf];
-      if (result) {
+      if (result && !result.excluded) {
         current.statesCounted += 1;
+        const votersCount = getVotersForState(state, loadedScenario);
         Object.entries(result.votes).forEach(([id, pct]) => {
           const numId = Number(id);
-          current.votes[numId] += (pct / 100) * state.voters;
+          current.votes[numId] += (pct / 100) * votersCount;
         });
-        if (result.winner) {
-          current.wins[result.winner] += 1;
-        }
+        if (result.winner) current.wins[result.winner] += 1;
       }
       grouped.set(state.region, current);
     }
@@ -329,7 +350,10 @@ export function ElectionSimulator({
       });
       return { region, pcts, wins: value.wins, statesCounted: value.statesCounted, winner: getWinner(pcts) };
     });
-  }, [results, candidates]);
+  }, [results, candidates, activeStates, loadedScenario]);
+
+  const scenarioYear = loadedScenario?.year;
+  const totalActiveStates = activeStates.length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-zinc-950 text-slate-100">
@@ -345,8 +369,11 @@ export function ElectionSimulator({
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-400">
                 {round === "primeiro" ? "Primeiro" : "Segundo"} Turno
+                {loadedScenario?.isCustom && <span className="ml-2 text-purple-400">• Cenário Personalizado</span>}
               </p>
-              <h1 className="text-2xl font-black tracking-tight text-white">Brasil 2026</h1>
+              <h1 className="text-2xl font-black tracking-tight text-white">
+                Brasil {scenarioYear ?? 2026}
+              </h1>
             </div>
           </div>
 
@@ -362,10 +389,9 @@ export function ElectionSimulator({
                 );
               })}
               <div className="px-3 py-1 rounded-full bg-white/5 text-xs font-semibold text-slate-400 border border-white/10">
-                {national.statesCounted}/27
+                {national.statesCounted}/{totalActiveStates}
               </div>
             </div>
-
             <div className="relative h-5 overflow-hidden rounded-full bg-slate-800/80 shadow-inner flex">
               {sortedCandidates.map((candidate) => {
                 const pct = national.candidatePcts[candidate.id] || 0;
@@ -413,19 +439,26 @@ export function ElectionSimulator({
       </header>
 
       <main className="mx-auto grid w-full max-w-[1800px] grid-cols-1 gap-6 px-4 py-6 xl:grid-cols-[320px_minmax(0,1fr)] xl:px-6">
+        {/* Sidebar */}
         <aside className="max-h-[calc(100vh-180px)] overflow-y-auto rounded-2xl border border-white/10 bg-gradient-to-b from-slate-900/80 to-slate-900/40 p-4 shadow-2xl backdrop-blur-sm">
           <h2 className="mb-4 text-sm font-black uppercase tracking-[0.18em] text-slate-400">Estados</h2>
           <div className="space-y-1.5">
-            {STATES.map((state) => {
+            {activeStates.map((state) => {
               const result = results[state.uf];
               const winner = result?.winner ? candidateById[result.winner] : null;
               const winnerPct = result?.winner ? result.votes[result.winner] : null;
+              const isExcluded = result?.excluded;
               return (
-                <motion.button key={state.uf} type="button" whileHover={{ x: 4 }} onClick={() => setStateDialog({ uf: state.uf, view: "menu" })}
-                  onMouseEnter={() => setHoveredState(state.uf)} onMouseLeave={() => setHoveredState(null)}
-                  className="group flex w-full items-center justify-between rounded-xl border border-transparent px-4 py-3 text-left transition-all hover:border-white/15 hover:bg-white/5 active:scale-[0.98]">
+                <motion.button key={state.uf} type="button" whileHover={{ x: 4 }}
+                  onClick={() => setStateDialog({ uf: state.uf, view: "menu" })}
+                  onMouseEnter={() => setHoveredState(state.uf)}
+                  onMouseLeave={() => setHoveredState(null)}
+                  className={`group flex w-full items-center justify-between rounded-xl border border-transparent px-4 py-3 text-left transition-all hover:border-white/15 hover:bg-white/5 active:scale-[0.98] ${isExcluded ? "opacity-40" : ""}`}>
                   <div>
-                    <div className="text-sm font-bold text-slate-200">{state.name}</div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-bold text-slate-200">{state.name}</div>
+                      {isExcluded && <span className="text-[10px] font-black text-red-400 border border-red-400/30 rounded px-1">EXCLUÍDO</span>}
+                    </div>
                     <div className="text-xs font-medium text-slate-500">{state.uf}</div>
                   </div>
                   <div className="text-right">
@@ -433,7 +466,7 @@ export function ElectionSimulator({
                       {winnerPct ? formatPct(winnerPct) : "--"}
                     </div>
                     <div className="text-[11px] font-medium text-slate-500">
-                      {result?.usesMunicipalities ? "Municipios" : "Estado"}
+                      {result?.usesMunicipalities ? "Municípios" : "Estado"}
                     </div>
                   </div>
                 </motion.button>
@@ -467,21 +500,18 @@ export function ElectionSimulator({
             )}
           </AnimatePresence>
 
+          {/* Map */}
           <div ref={mapContainerRef}
             className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950 to-slate-900 shadow-2xl touch-none cursor-grab active:cursor-grabbing overscroll-contain">
             <div className="absolute right-4 bottom-4 z-20 flex flex-col gap-2">
               <div className="flex items-center gap-1 rounded-xl border border-white/15 bg-black/60 p-1 backdrop-blur-md shadow-2xl">
                 <button type="button" onClick={() => setMapZoom((prev) => clamp(prev - 0.2, 0.5, 5))}
-                  className="w-10 h-10 flex items-center justify-center rounded-lg bg-slate-800 text-xl font-bold text-white hover:bg-slate-700 active:scale-95 transition-all shadow-lg">
-                  -
-                </button>
+                  className="w-10 h-10 flex items-center justify-center rounded-lg bg-slate-800 text-xl font-bold text-white hover:bg-slate-700 active:scale-95 transition-all shadow-lg">-</button>
                 <div className="min-w-[60px] text-center text-[10px] font-black tracking-tighter uppercase text-slate-400">
                   {Math.round(mapZoom * 100)}%
                 </div>
                 <button type="button" onClick={() => setMapZoom((prev) => clamp(prev + 0.2, 0.5, 5))}
-                  className="w-10 h-10 flex items-center justify-center rounded-lg bg-slate-800 text-xl font-bold text-white hover:bg-slate-700 active:scale-95 transition-all shadow-lg">
-                  +
-                </button>
+                  className="w-10 h-10 flex items-center justify-center rounded-lg bg-slate-800 text-xl font-bold text-white hover:bg-slate-700 active:scale-95 transition-all shadow-lg">+</button>
               </div>
               <button type="button" onClick={() => { setMapZoom(1); setMapOffset({ x: 0, y: 0 }); }}
                 className="rounded-xl border border-white/20 bg-black/60 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/10 backdrop-blur-md shadow-2xl active:scale-95 transition-all">
@@ -507,6 +537,9 @@ export function ElectionSimulator({
                     </div>
                   );
                 })}
+                {hoveredResult.excluded && (
+                  <div className="mt-2 text-xs font-black text-red-400 border border-red-400/30 rounded px-2 py-1">Excluído da contagem nacional</div>
+                )}
               </motion.div>
             )}
 
@@ -521,23 +554,36 @@ export function ElectionSimulator({
               <div className="h-[70vh] w-full overflow-hidden">
                 <motion.div className="w-full h-full origin-center" drag dragConstraints={mapContainerRef} dragElastic={0.1}
                   style={{ x: mapOffset.x, y: mapOffset.y, scale: mapZoom }}
-                  onDragEnd={(_event: unknown, info: { offset: { x: number; y: number } }) => { setMapOffset((prev) => ({ x: prev.x + info.offset.x, y: prev.y + info.offset.y })); }}>
+                  onDragEnd={(_event: unknown, info: { offset: { x: number; y: number } }) => {
+                    setMapOffset((prev) => ({ x: prev.x + info.offset.x, y: prev.y + info.offset.y }));
+                  }}>
                   <svg viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} className="h-full w-full pointer-events-none"
                     style={{ filter: "drop-shadow(0 20px 50px rgba(0,0,0,0.5))" }}>
                     {paths.map((pathItem) => {
                       const isHovered = hoveredState === pathItem.uf;
                       const result = results[pathItem.uf];
                       const winnerColor = result?.winner ? candidateById[result.winner]?.color : null;
+                      const isActive = activeStates.find(s => s.uf === pathItem.uf);
                       return (
                         <g key={pathItem.uf} className="pointer-events-auto">
-                          <motion.path d={pathItem.d} fill={getStateFill(pathItem.uf)} stroke={isHovered ? "#ffffff" : "#334155"}
-                            strokeWidth={isHovered ? 2.5 : 1} className="cursor-pointer transition-colors duration-200"
-                            style={{ filter: neonStates && isHovered && winnerColor ? `drop-shadow(0 0 15px ${winnerColor})` : "none" }}
-                            onMouseEnter={() => setHoveredState(pathItem.uf)} onMouseLeave={() => setHoveredState(null)}
-                            onClick={() => setStateDialog({ uf: pathItem.uf, view: "menu" })} whileHover={{ scale: 1.01 }} />
+                          <motion.path d={pathItem.d}
+                            fill={isActive ? getStateFill(pathItem.uf) : "#0a0f1a"}
+                            stroke={isHovered ? "#ffffff" : "#334155"}
+                            strokeWidth={isHovered ? 2.5 : 1}
+                            className="cursor-pointer transition-colors duration-200"
+                            style={{
+                              filter: neonStates && isHovered && winnerColor ? `drop-shadow(0 0 15px ${winnerColor})` : "none",
+                              opacity: isActive ? 1 : 0.2,
+                            }}
+                            onMouseEnter={() => setHoveredState(pathItem.uf)}
+                            onMouseLeave={() => setHoveredState(null)}
+                            onClick={() => {
+                              if (isActive) setStateDialog({ uf: pathItem.uf, view: "menu" });
+                            }}
+                            whileHover={{ scale: isActive ? 1.01 : 1 }} />
                           <text x={pathItem.centroid[0]} y={pathItem.centroid[1]}
                             className={`pointer-events-none select-none font-black ${isHovered ? "fill-white" : "fill-slate-400"}`}
-                            style={{ fontSize: "11px", textShadow: "0 1px 3px rgba(0,0,0,0.8)", opacity: mapZoom < 0.8 && !isHovered ? 0 : 1 }}
+                            style={{ fontSize: "11px", textShadow: "0 1px 3px rgba(0,0,0,0.8)", opacity: mapZoom < 0.8 && !isHovered ? 0 : (isActive ? 1 : 0.3) }}
                             textAnchor="middle">
                             {pathItem.uf}
                           </text>
@@ -550,12 +596,14 @@ export function ElectionSimulator({
             )}
           </div>
 
+          {/* Analytics */}
           <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-slate-900/90 to-slate-900/60 p-5 shadow-2xl">
             <div className="mb-5 flex flex-wrap gap-2">
               {[
-                { id: "regioes", label: "🗺️ Ganhos por regiao" },
+                { id: "regioes", label: "🗺️ Ganhos por região" },
                 { id: "desempenho", label: "📊 Desempenho geral" },
                 { id: "ranking", label: "🏆 Ranking de estados" },
+                { id: "candidatos", label: "🎯 Candidatos" },
               ].map((tab) => (
                 <button key={tab.id} type="button" onClick={() => setAnalyticsTab(tab.id as AnalyticsTab)}
                   className={`relative overflow-hidden rounded-xl px-4 py-2.5 text-sm font-bold transition-all ${
@@ -568,6 +616,7 @@ export function ElectionSimulator({
               ))}
             </div>
 
+            {/* Tab: Regiões */}
             {analyticsTab === "regioes" && (
               <div className="space-y-4">
                 <div className="flex flex-wrap gap-2">
@@ -586,7 +635,7 @@ export function ElectionSimulator({
                 <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_1fr]">
                   <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950/80 to-slate-900/50 p-4 shadow-xl">
                     <div className="mb-3 text-sm font-bold text-slate-300">
-                      {regionFocus ? `Mapa da regiao ${regionFocus}` : "Mapa do Brasil por regioes"}
+                      {regionFocus ? `Mapa da região ${regionFocus}` : "Mapa do Brasil por regiões"}
                     </div>
                     <div className="relative overflow-hidden group">
                       <svg viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} className="h-[420px] w-full transition-transform duration-500 group-hover:scale-[1.05]">
@@ -594,17 +643,19 @@ export function ElectionSimulator({
                           const state = STATE_BY_UF[pathItem.uf];
                           if (!state) return null;
                           const inFocus = regionFocus ? state.region === regionFocus : true;
+                          const isActive = !!activeStates.find(s => s.uf === pathItem.uf);
                           const result = results[pathItem.uf];
                           const winnerColor = result?.winner ? candidateById[result.winner]?.color : null;
                           return (
                             <g key={pathItem.uf}>
-                              <path d={pathItem.d} fill={inFocus ? getStateFill(pathItem.uf) : "#020617"}
-                                stroke={inFocus ? (winnerColor ? winnerColor : "#1e293b") : "#0f172a"}
-                                strokeWidth={inFocus ? (winnerColor ? 1.5 : 1) : 0.2}
-                                className={`transition-all duration-500 ${inFocus ? "cursor-pointer" : "cursor-default"}`}
-                                style={{ opacity: inFocus ? 1 : 0.3 }}
-                                onClick={() => { if (inFocus) setStateDialog({ uf: pathItem.uf, view: "menu" }); }} />
-                              {inFocus && (
+                              <path d={pathItem.d}
+                                fill={inFocus && isActive ? getStateFill(pathItem.uf) : "#020617"}
+                                stroke={inFocus && isActive ? (winnerColor ? winnerColor : "#1e293b") : "#0f172a"}
+                                strokeWidth={inFocus && isActive ? (winnerColor ? 1.5 : 1) : 0.2}
+                                className={`transition-all duration-500 ${inFocus && isActive ? "cursor-pointer" : "cursor-default"}`}
+                                style={{ opacity: inFocus && isActive ? 1 : 0.3 }}
+                                onClick={() => { if (inFocus && isActive) setStateDialog({ uf: pathItem.uf, view: "menu" }); }} />
+                              {inFocus && isActive && (
                                 <text x={pathItem.centroid[0]} y={pathItem.centroid[1]}
                                   className="pointer-events-none select-none fill-white/80 text-[10px] font-black"
                                   textAnchor="middle" style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}>
@@ -645,12 +696,12 @@ export function ElectionSimulator({
               </div>
             )}
 
+            {/* Tab: Desempenho */}
             {analyticsTab === "desempenho" && (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <motion.div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-800/60 to-slate-900/40 p-5 shadow-lg hover:shadow-xl transition-shadow" whileHover={{ scale: 1.02 }}>
                   <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500 flex items-center gap-2">
-                    <span className="text-xl">👑</span>
-                    Lideranca nacional
+                    <span className="text-xl">👑</span> Liderança nacional
                   </div>
                   {sortedCandidates[0] && (
                     <div className="mt-3 text-3xl font-black" style={{ color: sortedCandidates[0].color, textShadow: `0 0 40px ${sortedCandidates[0].color}40` }}>
@@ -660,8 +711,7 @@ export function ElectionSimulator({
                 </motion.div>
                 <motion.div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-800/60 to-slate-900/40 p-5 shadow-lg hover:shadow-xl transition-shadow" whileHover={{ scale: 1.02 }}>
                   <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500 flex items-center gap-2">
-                    <span className="text-xl">🗺️</span>
-                    Estados vencidos
+                    <span className="text-xl">🗺️</span> Estados vencidos
                   </div>
                   <div className="mt-3 space-y-1">
                     {candidates.map((c) => (
@@ -674,8 +724,7 @@ export function ElectionSimulator({
                 </motion.div>
                 <motion.div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-800/60 to-slate-900/40 p-5 shadow-lg hover:shadow-xl transition-shadow" whileHover={{ scale: 1.02 }}>
                   <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500 flex items-center gap-2">
-                    <span className="text-xl">📈</span>
-                    Margem media
+                    <span className="text-xl">📈</span> Margem média
                   </div>
                   <div className="mt-3 text-3xl font-black text-white drop-shadow-lg">
                     {performanceStats.averageMargin.toFixed(2)} <span className="text-lg text-slate-400">pp</span>
@@ -684,9 +733,10 @@ export function ElectionSimulator({
               </div>
             )}
 
+            {/* Tab: Ranking de estados */}
             {analyticsTab === "ranking" && (
               <div className="space-y-2">
-                {STATES.map((state, index) => {
+                {activeStates.map((state, index) => {
                   const result = results[state.uf];
                   if (!result) return null;
                   const winner = result.winner ? candidateById[result.winner] : null;
@@ -703,34 +753,143 @@ export function ElectionSimulator({
                           <div className="text-xs font-medium text-slate-500">{state.uf}</div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        {winner && (
-                          <>
-                            <div className="text-lg font-black" style={{ color: winner.color, textShadow: `0 0 20px ${winner.color}40` }}>
-                              {winner.name}
-                            </div>
-                            <div className="text-sm font-medium text-slate-400">{formatPct(result.votes[result.winner!])}</div>
-                          </>
+                      <div className="flex items-center gap-4">
+                        {result.excluded && (
+                          <span className="text-[10px] font-black text-red-400 border border-red-400/30 rounded px-2 py-0.5">EXCLUÍDO</span>
                         )}
+                        <div className="text-right">
+                          {winner && (
+                            <>
+                              <div className="text-lg font-black" style={{ color: winner.color, textShadow: `0 0 20px ${winner.color}40` }}>
+                                {winner.name}
+                              </div>
+                              <div className="text-sm font-medium text-slate-400">{formatPct(result.votes[result.winner!])}</div>
+                            </>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleResetState(state.uf)}
+                          title="Resetar resultado deste estado"
+                          className="rounded-lg border border-red-500/30 bg-red-500/10 px-2 py-1 text-xs font-bold text-red-300 hover:bg-red-500/20 transition-all flex-shrink-0"
+                        >
+                          Reset
+                        </button>
                       </div>
                     </motion.div>
                   );
                 })}
               </div>
             )}
+
+            {/* Tab: Candidatos — classificação geral */}
+            {analyticsTab === "candidatos" && (
+              <div className="space-y-4">
+                <p className="text-xs text-slate-500 mb-2">Classificação nacional com base nos estados preenchidos.</p>
+                <div className="space-y-3">
+                  {sortedCandidates.map((candidate, index) => {
+                    const pct = national.candidatePcts[candidate.id] || 0;
+                    const votes = national.candidateVotes[candidate.id] || 0;
+                    const winsCount = performanceStats.candidateWins[candidate.id] || 0;
+                    return (
+                      <motion.div
+                        key={candidate.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                        className="rounded-2xl border bg-gradient-to-r from-slate-800/60 to-slate-900/40 p-5 shadow-lg"
+                        style={{ borderColor: `${candidate.color}30` }}
+                      >
+                        <div className="flex items-center gap-4">
+                          {/* Rank badge */}
+                          <div
+                            className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl text-2xl font-black text-white shadow-lg"
+                            style={{ backgroundColor: `${candidate.color}25`, border: `2px solid ${candidate.color}60` }}
+                          >
+                            {index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `#${index + 1}`}
+                          </div>
+
+                          {/* Photo */}
+                          <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-full border-2" style={{ borderColor: candidate.color }}>
+                            {candidate.photo ? (
+                              <img src={candidate.photo} alt={candidate.name} className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-sm font-black" style={{ color: candidate.color }}>
+                                {candidate.number}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xl font-black" style={{ color: candidate.color }}>{candidate.name}</span>
+                              {candidate.ideology && (
+                                <span className="rounded-lg bg-slate-800 px-2 py-0.5 text-xs font-bold text-slate-400">{candidate.ideology}</span>
+                              )}
+                            </div>
+                            <div className="text-xs text-slate-500 mt-0.5">{candidate.party} · Vice: {candidate.vice}</div>
+                            {candidate.coalition && (
+                              <div className="text-xs text-slate-600 mt-0.5">🤝 {candidate.coalition}</div>
+                            )}
+                          </div>
+
+                          {/* Stats */}
+                          <div className="flex items-center gap-6 flex-shrink-0">
+                            <div className="text-center">
+                              <div className="text-3xl font-black text-white">{formatPct(pct)}</div>
+                              <div className="text-xs text-slate-500">Nacional</div>
+                            </div>
+                            <div className="text-center hidden md:block">
+                              <div className="text-xl font-black text-white">{Math.round(votes).toLocaleString("pt-BR")}</div>
+                              <div className="text-xs text-slate-500">Votos</div>
+                            </div>
+                            <div className="text-center hidden md:block">
+                              <div className="text-xl font-black text-white">{winsCount}</div>
+                              <div className="text-xs text-slate-500">Estados</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Bar */}
+                        <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-800">
+                          <motion.div
+                            className="h-full rounded-full"
+                            style={{ backgroundColor: candidate.color }}
+                            initial={{ width: 0 }}
+                            animate={{ width: `${pct}%` }}
+                            transition={{ type: "spring", stiffness: 100, damping: 20, delay: index * 0.05 }}
+                          />
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+
+                {/* Total */}
+                <div className="mt-4 rounded-2xl border border-white/10 bg-slate-900/60 p-4 text-center">
+                  <div className="text-sm text-slate-500">Total de votos válidos contabilizados</div>
+                  <div className="text-3xl font-black text-white">{Math.round(national.totalVotes).toLocaleString("pt-BR")}</div>
+                  <div className="text-xs text-slate-500 mt-1">{national.statesCounted} de {totalActiveStates} estados preenchidos</div>
+                </div>
+              </div>
+            )}
           </div>
         </section>
       </main>
 
+      {/* Modals */}
       <AnimatePresence>
         {selectedStateInfo && stateDialog?.view === "menu" && (
           <StateActionModal
             key={`${selectedStateInfo.uf}-menu`}
             stateInfo={selectedStateInfo}
+            currentResult={results[selectedStateInfo.uf]}
             onClose={() => setStateDialog(null)}
             onEdit={() => setStateDialog({ uf: selectedStateInfo.uf, view: "edit" })}
             onPhoto={() => setStateDialog({ uf: selectedStateInfo.uf, view: "photo" })}
             onMunicipalityEdit={() => setStateDialog({ uf: selectedStateInfo.uf, view: "municipios" })}
+            onReset={() => handleResetState(selectedStateInfo.uf)}
           />
         )}
       </AnimatePresence>
@@ -771,21 +930,42 @@ export function ElectionSimulator({
             photoScale={nationalPhotoScale}
             photoMapScale={photoMapScale}
             onClose={() => setStateDialog(null)}
+            scenarioYear={scenarioYear}
           />
         )}
       </AnimatePresence>
 
       <AnimatePresence>
         {nationalPhotoOpen && (
-          <NationalPhotoModal candidates={sortedCandidates} national={national} paths={paths} results={results}
-            photoScale={nationalPhotoScale} photoMapScale={photoMapScale} candidateById={candidateById} onClose={() => setNationalPhotoOpen(false)} />
+          <NationalPhotoModal
+            candidates={sortedCandidates}
+            national={national}
+            paths={paths}
+            results={results}
+            photoScale={nationalPhotoScale}
+            photoMapScale={photoMapScale}
+            candidateById={candidateById}
+            onClose={() => setNationalPhotoOpen(false)}
+            scenarioYear={scenarioYear}
+          />
         )}
       </AnimatePresence>
 
       <AnimatePresence>
         {regionalPhotoOpen && (
-          <RegionalPhotoModal region={selectedPhotoRegion} onRegionChange={setSelectedPhotoRegion} candidates={sortedCandidates}
-            paths={paths} stateGeoData={stateGeoData} results={results} photoScale={nationalPhotoScale} photoMapScale={photoMapScale} candidateById={candidateById} onClose={() => setRegionalPhotoOpen(false)} />
+          <RegionalPhotoModal
+            region={selectedPhotoRegion}
+            onRegionChange={setSelectedPhotoRegion}
+            candidates={sortedCandidates}
+            paths={paths}
+            stateGeoData={stateGeoData}
+            results={results}
+            photoScale={nationalPhotoScale}
+            photoMapScale={photoMapScale}
+            candidateById={candidateById}
+            onClose={() => setRegionalPhotoOpen(false)}
+            scenarioYear={scenarioYear}
+          />
         )}
       </AnimatePresence>
     </div>

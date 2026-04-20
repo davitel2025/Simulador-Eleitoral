@@ -6,21 +6,26 @@ import {
   MapSizeSlider,
   OthersCard,
   TopCandidateCard,
+  PhotoBackgroundPicker,
+  type PhotoCardShape,
 } from "../photo/PhotoCards";
 import { StateMapCenter } from "../photo/MapCenters";
 import type { Candidate, StateInfo, StateResult } from "../../types";
 
-export function StatePhotoModal({ stateInfo, candidates, result, photoScale, photoMapScale, onClose }: {
+export function StatePhotoModal({ stateInfo, candidates, result, photoScale, photoMapScale, onClose, scenarioYear }: {
   stateInfo: StateInfo;
   candidates: Candidate[];
   result?: StateResult;
   photoScale: number;
   photoMapScale: number;
   onClose: () => void;
+  scenarioYear?: number;
 }) {
   const captureRef = useRef<HTMLDivElement>(null);
   const [localMapScale, setLocalMapScale] = useState(photoMapScale);
   const [showMunicipalityPaint, setShowMunicipalityPaint] = useState(result?.usesMunicipalities ?? false);
+  const [bgValue, setBgValue] = useState("#0f172a");
+  const [cardShape, setCardShape] = useState<PhotoCardShape>("circle");
 
   const ranked = useMemo(() => {
     const rows = candidates
@@ -47,18 +52,20 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
   const winnerColor = winnerCandidate?.color ?? null;
   const winnerPct = ranked.first?.pct ?? 0;
 
+  const isGradientBg = bgValue.startsWith("linear-gradient");
+  const bgStyle = isGradientBg ? { background: bgValue } : { backgroundColor: bgValue };
+
   const handleDownload = async () => {
     if (!captureRef.current) return;
     try {
-      const canvas = await html2canvas(captureRef.current, { 
-        backgroundColor: "#0f172a", 
-        scale: 2, 
-        useCORS: true, 
+      const canvas = await html2canvas(captureRef.current, {
+        backgroundColor: isGradientBg ? "#0f172a" : bgValue,
+        scale: 2,
+        useCORS: true,
         allowTaint: true,
-        logging: false 
+        logging: false,
       });
-      
-      canvas.toBlob((blob) => {
+      canvas.toBlob((blob: Blob | null) => {
         if (!blob) return;
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
@@ -68,7 +75,7 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
         anchor.click();
         document.body.removeChild(anchor);
         URL.revokeObjectURL(url);
-      }, 'image/png');
+      }, "image/png");
     } catch (error) {
       console.error("Erro ao gerar imagem:", error);
       alert("Erro ao salvar imagem. Tente novamente.");
@@ -79,42 +86,51 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
   const bottomAvatarPx = Math.round(80 * photoScale);
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 overflow-y-auto bg-black/80 p-4 backdrop-blur-sm">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 overflow-y-auto bg-black/80 p-4 backdrop-blur-sm">
       <div className="mx-auto w-full max-w-[1600px]">
         <div className="mb-4 flex items-center justify-between flex-wrap gap-3">
-          <h3 className="text-3xl font-black text-white">Foto estadual - {stateInfo.name}</h3>
+          <h3 className="text-3xl font-black text-white">Foto estadual — {stateInfo.name}</h3>
           <div className="flex gap-2 items-center flex-wrap">
+            {/* Shape toggle */}
             <div className="flex rounded-xl border border-white/10 bg-slate-900/80 p-1">
-              <button
-                type="button"
-                onClick={() => setShowMunicipalityPaint(false)}
-                className={`rounded-lg px-3 py-1 text-xs font-black ${showMunicipalityPaint ? "text-slate-300" : "bg-violet-600 text-white"}`}
-              >
-                Sem municipio
+              <button type="button" onClick={() => setCardShape("circle")}
+                className={`rounded-lg px-3 py-1 text-xs font-black transition-all ${cardShape === "circle" ? "bg-violet-600 text-white" : "text-slate-300"}`}>
+                ⚪ Bola
               </button>
-              <button
-                type="button"
-                onClick={() => setShowMunicipalityPaint(true)}
-                className={`rounded-lg px-3 py-1 text-xs font-black ${showMunicipalityPaint ? "bg-violet-600 text-white" : "text-slate-300"}`}
-              >
-                Com municipio
+              <button type="button" onClick={() => setCardShape("portrait")}
+                className={`rounded-lg px-3 py-1 text-xs font-black transition-all ${cardShape === "portrait" ? "bg-violet-600 text-white" : "text-slate-300"}`}>
+                🟦 Retrato
               </button>
             </div>
+            <div className="flex rounded-xl border border-white/10 bg-slate-900/80 p-1">
+              <button type="button" onClick={() => setShowMunicipalityPaint(false)}
+                className={`rounded-lg px-3 py-1 text-xs font-black ${showMunicipalityPaint ? "text-slate-300" : "bg-violet-600 text-white"}`}>
+                Sem município
+              </button>
+              <button type="button" onClick={() => setShowMunicipalityPaint(true)}
+                className={`rounded-lg px-3 py-1 text-xs font-black ${showMunicipalityPaint ? "bg-violet-600 text-white" : "text-slate-300"}`}>
+                Com município
+              </button>
+            </div>
+            <PhotoBackgroundPicker value={bgValue} onChange={setBgValue} />
             <MapSizeSlider value={localMapScale} onChange={setLocalMapScale} />
             <button type="button" onClick={handleDownload} className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-black text-zinc-950">Salvar PNG</button>
             <button type="button" onClick={onClose} className="rounded-xl border border-white/15 px-4 py-2 text-sm font-bold text-white">Fechar</button>
           </div>
         </div>
 
-        <div ref={captureRef} className="rounded-[40px] border border-white/10 bg-slate-950 p-8">
+        <div ref={captureRef} className="rounded-[40px] border border-white/10 p-8" style={bgStyle}>
           <div className="mb-6 text-center">
-            <div className="text-[11px] font-black uppercase tracking-[0.6em] text-slate-500">Resultado Eleicao 2026 - {stateInfo.name}</div>
+            <div className="text-[11px] font-black uppercase tracking-[0.6em] text-slate-500">
+              Resultado Eleição {scenarioYear ?? 2026} — {stateInfo.name}
+            </div>
           </div>
 
           <div className="flex items-center justify-center gap-4 mb-8 flex-wrap md:flex-nowrap">
             {ranked.first && (
               <div className="flex-1 min-w-[220px]">
-                <TopCandidateCard item={ranked.first} rank={0} avatarPx={topAvatarPx} showVice={true} showVotes={true} />
+                <TopCandidateCard item={ranked.first} rank={0} avatarPx={topAvatarPx} showVice={true} showVotes={true} shape={cardShape} />
               </div>
             )}
             <StateMapCenter
@@ -128,7 +144,7 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
             />
             {ranked.second && (
               <div className="flex-1 min-w-[220px]">
-                <TopCandidateCard item={ranked.second} rank={1} avatarPx={topAvatarPx} showVice={true} showVotes={true} />
+                <TopCandidateCard item={ranked.second} rank={1} avatarPx={topAvatarPx} showVice={true} showVotes={true} shape={cardShape} />
               </div>
             )}
           </div>
@@ -137,7 +153,7 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
             <div className="flex justify-center">
               <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${ranked.bottom3.length + (ranked.hasOthers ? 1 : 0)}, minmax(0, 200px))` }}>
                 {ranked.bottom3.map((item) => (
-                  <BottomCandidateCard key={item.candidate.id} item={item} avatarPx={bottomAvatarPx} showVotes={true} />
+                  <BottomCandidateCard key={item.candidate.id} item={item} avatarPx={bottomAvatarPx} showVotes={true} shape={cardShape} />
                 ))}
                 {ranked.hasOthers && <OthersCard othersPct={ranked.othersPct} othersVotes={ranked.othersVotes} avatarPx={bottomAvatarPx} showVotes={true} />}
               </div>

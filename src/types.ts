@@ -1,6 +1,8 @@
 export type CandidateId = number;
 export type ElectionRound = "primeiro" | "segundo";
 export type RegionName = "Norte" | "Nordeste" | "Centro-Oeste" | "Sudeste" | "Sul";
+export type AnalyticsTab = "regioes" | "desempenho" | "ranking" | "candidatos";
+export type PhotoCardShape = "circle" | "portrait";
 
 export interface Candidate {
   id: CandidateId;
@@ -13,16 +15,22 @@ export interface Candidate {
   vicePhoto?: string;
   partyLogo?: string;
   ideology?: string;
+  coalition?: string;
 }
 
 export interface StateInfo {
   uf: string;
   name: string;
   region: RegionName;
-  voters: number; // voters padrão (2026)
-  voters2018: number; // eleitorado real de 2018
-  voters2022: number; // eleitorado real de 2022
+  voters: number;
+  voters2018: number;
+  voters2022: number;
   ibgeCode: string;
+}
+
+export interface CustomStateInfo {
+  uf: string;
+  voters: number;
 }
 
 export interface StateResult {
@@ -32,6 +40,7 @@ export interface StateResult {
   usesMunicipalities: boolean;
   municipalities: Record<string, Record<CandidateId, number>>;
   municipalityPaint: Record<string, CandidateId>;
+  excluded?: boolean; // quando true, não entra na contagem nacional
 }
 
 export interface PathData {
@@ -64,4 +73,6 @@ export interface PoliticalScenario {
   description: string;
   candidates: Omit<Candidate, 'id'>[];
   results?: Record<string, Record<number, number>>;
+  customStates?: CustomStateInfo[]; // para cenários personalizados
+  isCustom?: boolean;
 }
