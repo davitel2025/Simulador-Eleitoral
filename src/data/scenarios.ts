@@ -27,7 +27,7 @@ export const POLITICAL_SCENARIOS: PoliticalScenario[] = [
         color: "#1e40af",
         ideology: "Direita",
         photo:
-          "https://upload.wikimedia.org/wikipedia/commons/d/d0/Jair_Bolsonaro_pela_EC_77_-M%C3%A9dico_Militar_no_SUS%28cropped%29.jpg",
+          "https://upload.wikimedia.org/wikipedia/commons/thumb/3/37/Jair_Bolsonaro_2019_Portrait_%283x4_cropped_center%29.jpg/960px-Jair_Bolsonaro_2019_Portrait_%283x4_cropped_center%29.jpg",
       },
       {
         name: "Fernando Haddad",

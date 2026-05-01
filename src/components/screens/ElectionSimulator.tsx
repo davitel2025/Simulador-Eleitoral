@@ -30,11 +30,16 @@ import { RegionalPhotoModal } from "../modals/RegionalPhotoModal";
 
 type AnalyticsTab = "regioes" | "desempenho" | "ranking" | "candidatos";
 
-// Helper to get voters count for a state based on scenario
-function getVotersForState(state: StateInfo, scenario?: PoliticalScenario | null): number {
-  // Custom scenario with explicit per-state voters
+// ─── Helper: votos de um estado conforme cenário ──────────────────────────────
+// Se o cenário tem nationalVoters + customStates, os voters já foram distribuídos
+// proporcionalmente na InitialScreen e gravados em customStates[].voters.
+// Portanto basta ler customStates normalmente.
+function getVotersForState(
+  state: StateInfo,
+  scenario?: PoliticalScenario | null
+): number {
   if (scenario?.customStates) {
-    const custom = scenario.customStates.find(cs => cs.uf === state.uf);
+    const custom = scenario.customStates.find((cs) => cs.uf === state.uf);
     if (custom) return custom.voters;
   }
   if (scenario?.year === 2018) return state.voters2018;
@@ -42,15 +47,16 @@ function getVotersForState(state: StateInfo, scenario?: PoliticalScenario | null
   return state.voters;
 }
 
-// Which states are active in this scenario
+// ─── Helper: estados ativos ───────────────────────────────────────────────────
 function getActiveStates(scenario?: PoliticalScenario | null): StateInfo[] {
   if (scenario?.customStates) {
-    const ufs = new Set(scenario.customStates.map(cs => cs.uf));
-    return STATES.filter(s => ufs.has(s.uf));
+    const ufs = new Set(scenario.customStates.map((cs) => cs.uf));
+    return STATES.filter((s) => ufs.has(s.uf));
   }
   return STATES;
 }
 
+// ─── ElectionSimulator ────────────────────────────────────────────────────────
 export function ElectionSimulator({
   round,
   candidates,
@@ -67,7 +73,10 @@ export function ElectionSimulator({
   const [results, setResults] = useState<Record<string, StateResult>>({});
   const [paths, setPaths] = useState<PathData[]>([]);
   const [stateGeoData, setStateGeoData] = useState<any>(null);
-  const [stateDialog, setStateDialog] = useState<{ uf: string; view: "menu" | "edit" | "photo" | "municipios" } | null>(null);
+  const [stateDialog, setStateDialog] = useState<{
+    uf: string;
+    view: "menu" | "edit" | "photo" | "municipios";
+  } | null>(null);
   const [hoveredState, setHoveredState] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [nationalPhotoOpen, setNationalPhotoOpen] = useState(false);
@@ -84,12 +93,15 @@ export function ElectionSimulator({
   const [mapOffset, setMapOffset] = useState({ x: 0, y: 0 });
   const mapContainerRef = useRef<HTMLDivElement>(null);
 
-  const activeStates = useMemo(() => getActiveStates(loadedScenario), [loadedScenario]);
+  const activeStates = useMemo(
+    () => getActiveStates(loadedScenario),
+    [loadedScenario]
+  );
 
-  // Load scenario results
+  // ── Carrega resultados do cenário histórico ──────────────────────────────
   useEffect(() => {
     if (!loadedScenario?.results) return;
-    const candidateIds = candidates.map(c => c.id);
+    const candidateIds = candidates.map((c) => c.id);
     if (candidateIds.length === 0) return;
 
     const newResults: Record<string, StateResult> = {};
@@ -102,7 +114,7 @@ export function ElectionSimulator({
       }
       const total = Object.values(votes).reduce((sum, v) => sum + v, 0);
       if (total > 0) {
-        Object.keys(votes).forEach(id => {
+        Object.keys(votes).forEach((id) => {
           votes[Number(id)] = (votes[Number(id)] / total) * 100;
         });
       }
@@ -118,6 +130,7 @@ export function ElectionSimulator({
     setResults(newResults);
   }, [loadedScenario, candidates]);
 
+  // ── Carrega mapa GeoJSON ─────────────────────────────────────────────────
   useEffect(() => {
     const loadMap = async () => {
       const response = await fetch(STATE_GEO_URL);
@@ -131,6 +144,7 @@ export function ElectionSimulator({
     });
   }, []);
 
+  // ── Scroll wheel zoom ────────────────────────────────────────────────────
   useEffect(() => {
     const mapNode = mapContainerRef.current;
     if (!mapNode) return;
@@ -143,6 +157,7 @@ export function ElectionSimulator({
     return () => mapNode.removeEventListener("wheel", onWheel);
   }, []);
 
+  // ── Normaliza votos quando candidatos mudam ──────────────────────────────
   useEffect(() => {
     const candidateIds = candidates.map((candidate) => candidate.id);
     if (candidateIds.length === 0) return;
@@ -161,7 +176,9 @@ export function ElectionSimulator({
     });
   }, [candidates]);
 
-  // National totals — only counting non-excluded states
+  // ── Totais nacionais ─────────────────────────────────────────────────────
+  // Se o cenário tem nationalVoters, usa esse total como base para os votos
+  // (os voters por estado já foram distribuídos proporcionalmente)
   const national = useMemo(() => {
     const candidateVotes: Record<CandidateId, number> = {};
     candidates.forEach((c) => { candidateVotes[c.id] = 0; });
@@ -179,20 +196,32 @@ export function ElectionSimulator({
         candidateVotes[id] = (candidateVotes[id] || 0) + (pct / 100) * votersCount;
       });
     }
+
     const totalVotes = Object.values(candidateVotes).reduce((sum, v) => sum + v, 0);
     const candidatePcts: Record<CandidateId, number> = {};
     Object.keys(candidateVotes).forEach((id) => {
       const numId = Number(id);
-      candidatePcts[numId] = totalVotes > 0 ? (candidateVotes[numId] / totalVotes) * 100 : 0;
+      candidatePcts[numId] =
+        totalVotes > 0 ? (candidateVotes[numId] / totalVotes) * 100 : 0;
     });
-    return { candidateVotes, candidatePcts, totalVotes, totalVoters, statesCounted, winner: getWinner(candidatePcts) };
+
+    return {
+      candidateVotes,
+      candidatePcts,
+      totalVotes,
+      totalVoters,
+      statesCounted,
+      winner: getWinner(candidatePcts),
+    };
   }, [results, candidates, loadedScenario, activeStates]);
 
-  const candidateById = useMemo(() => Object.fromEntries(candidates.map((c) => [c.id, c])), [candidates]);
+  const candidateById = useMemo(
+    () => Object.fromEntries(candidates.map((c) => [c.id, c])),
+    [candidates]
+  );
 
   const getStateFill = (uf: string): string => {
-    // Dim inactive states
-    if (activeStates.length < STATES.length && !activeStates.find(s => s.uf === uf)) {
+    if (activeStates.length < STATES.length && !activeStates.find((s) => s.uf === uf)) {
       return "#0f172a";
     }
     const result = results[uf];
@@ -216,7 +245,10 @@ export function ElectionSimulator({
     setStateDialog(null);
   };
 
-  const handleMunicipalitySave = (uf: string, municipalityPaint: Record<string, CandidateId>) => {
+  const handleMunicipalitySave = (
+    uf: string,
+    municipalityPaint: Record<string, CandidateId>
+  ) => {
     setResults((prev) => {
       const existing = prev[uf];
       const candidateIds = candidates.map((candidate) => candidate.id);
@@ -241,7 +273,6 @@ export function ElectionSimulator({
     setStateDialog(null);
   };
 
-  // Reset a single state's result
   const handleResetState = (uf: string) => {
     setResults((prev) => {
       const next = { ...prev };
@@ -251,8 +282,15 @@ export function ElectionSimulator({
   };
 
   const handleExport = () => {
-    const payload = { round, candidates, results, generatedAt: new Date().toISOString() };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const payload = {
+      round,
+      candidates,
+      results,
+      generatedAt: new Date().toISOString(),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -274,20 +312,25 @@ export function ElectionSimulator({
         }
         if (payload.results && typeof payload.results === "object") {
           const normalized: Record<string, StateResult> = {};
-          for (const [uf, result] of Object.entries(payload.results as Record<string, any>)) {
+          for (const [uf, result] of Object.entries(
+            payload.results as Record<string, any>
+          )) {
             normalized[uf] = {
               uf,
               votes: result.votes ?? {},
               winner: result.winner ?? null,
               municipalities: result.municipalities ?? {},
               municipalityPaint: result.municipalityPaint ?? {},
-              usesMunicipalities: Object.keys(result.municipalityPaint ?? {}).length > 0,
+              usesMunicipalities:
+                Object.keys(result.municipalityPaint ?? {}).length > 0,
             };
           }
           setResults(normalized);
         }
       } catch {
-        alert("Arquivo inválido. Certifique-se de importar um JSON exportado pelo simulador.");
+        alert(
+          "Arquivo inválido. Certifique-se de importar um JSON exportado pelo simulador."
+        );
       }
     };
     reader.readAsText(file);
@@ -309,22 +352,36 @@ export function ElectionSimulator({
   const performanceStats = useMemo(() => {
     const candidateWins: Record<CandidateId, number> = {};
     candidates.forEach((c) => { candidateWins[c.id] = 0; });
-    const allResults = Object.values(results).filter(r => !r.excluded);
+    const allResults = Object.values(results).filter((r) => !r.excluded);
     allResults.forEach((result) => {
-      if (result.winner) candidateWins[result.winner] = (candidateWins[result.winner] || 0) + 1;
+      if (result.winner)
+        candidateWins[result.winner] = (candidateWins[result.winner] || 0) + 1;
     });
-    const averageMargin = allResults.length === 0 ? 0 :
-      allResults.reduce((sum, result) => {
-        const sorted = Object.values(result.votes).sort((a, b) => b - a);
-        return sum + (sorted[0] - (sorted[1] || 0));
-      }, 0) / allResults.length;
+    const averageMargin =
+      allResults.length === 0
+        ? 0
+        : allResults.reduce((sum, result) => {
+            const sorted = Object.values(result.votes).sort((a, b) => b - a);
+            return sum + (sorted[0] - (sorted[1] || 0));
+          }, 0) / allResults.length;
     return { candidateWins, averageMargin };
   }, [results, candidates]);
 
   const regionalStats = useMemo(() => {
-    const grouped = new Map<RegionName, { votes: Record<CandidateId, number>; wins: Record<CandidateId, number>; statesCounted: number }>();
+    const grouped = new Map<
+      RegionName,
+      {
+        votes: Record<CandidateId, number>;
+        wins: Record<CandidateId, number>;
+        statesCounted: number;
+      }
+    >();
     for (const state of activeStates) {
-      const current = grouped.get(state.region) ?? { votes: {}, wins: {}, statesCounted: 0 };
+      const current = grouped.get(state.region) ?? {
+        votes: {},
+        wins: {},
+        statesCounted: 0,
+      };
       candidates.forEach((c) => {
         if (!current.votes[c.id]) current.votes[c.id] = 0;
         if (!current.wins[c.id]) current.wins[c.id] = 0;
@@ -342,13 +399,23 @@ export function ElectionSimulator({
       grouped.set(state.region, current);
     }
     return REGIONS.map((region) => {
-      const value = grouped.get(region) ?? { votes: {}, wins: {}, statesCounted: 0 };
+      const value = grouped.get(region) ?? {
+        votes: {},
+        wins: {},
+        statesCounted: 0,
+      };
       const total = Object.values(value.votes).reduce((sum, v) => sum + v, 0);
       const pcts: Record<CandidateId, number> = {};
       candidates.forEach((c) => {
         pcts[c.id] = total > 0 ? ((value.votes[c.id] || 0) / total) * 100 : 0;
       });
-      return { region, pcts, wins: value.wins, statesCounted: value.statesCounted, winner: getWinner(pcts) };
+      return {
+        region,
+        pcts,
+        wins: value.wins,
+        statesCounted: value.statesCounted,
+        winner: getWinner(pcts),
+      };
     });
   }, [results, candidates, activeStates, loadedScenario]);
 
@@ -357,11 +424,18 @@ export function ElectionSimulator({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-zinc-950 text-slate-100">
+      {/* ── Header ──────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/80 backdrop-blur-xl px-4 py-4 shadow-2xl md:px-6">
         <div className="mx-auto flex w-full max-w-[1800px] flex-col gap-4 xl:flex-row xl:items-center">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg shadow-emerald-500/25">
-              <svg className="h-6 w-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <svg
+                className="h-6 w-6 text-white"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
                 <rect x="4" y="4" width="16" height="16" rx="2" />
                 <circle cx="12" cy="12" r="3" />
               </svg>
@@ -369,7 +443,14 @@ export function ElectionSimulator({
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-400">
                 {round === "primeiro" ? "Primeiro" : "Segundo"} Turno
-                {loadedScenario?.isCustom && <span className="ml-2 text-purple-400">• Cenário Personalizado</span>}
+                {loadedScenario?.isCustom && (
+                  <span className="ml-2 text-purple-400">• Cenário Personalizado</span>
+                )}
+                {loadedScenario?.nationalVoters && (
+                  <span className="ml-2 text-violet-400">
+                    • {loadedScenario.nationalVoters.toLocaleString("pt-BR")} eleitores nacionais
+                  </span>
+                )}
               </p>
               <h1 className="text-2xl font-black tracking-tight text-white">
                 Brasil {scenarioYear ?? 2026}
@@ -382,7 +463,11 @@ export function ElectionSimulator({
               {sortedCandidates.slice(0, 3).map((candidate) => {
                 const pct = national.candidatePcts[candidate.id] || 0;
                 return (
-                  <div key={candidate.id} className="flex items-center gap-2" style={{ color: candidate.color }}>
+                  <div
+                    key={candidate.id}
+                    className="flex items-center gap-2"
+                    style={{ color: candidate.color }}
+                  >
                     <div className="text-lg font-black">{formatPct(pct)}</div>
                     <span className="hidden md:inline">{candidate.name}</span>
                   </div>
@@ -396,52 +481,87 @@ export function ElectionSimulator({
               {sortedCandidates.map((candidate) => {
                 const pct = national.candidatePcts[candidate.id] || 0;
                 return (
-                  <motion.div key={candidate.id} className="h-full" style={{ backgroundColor: candidate.color, width: `${pct}%` }}
-                    initial={{ width: 0 }} animate={{ width: `${pct}%` }}
-                    transition={{ type: "spring", stiffness: 120, damping: 20 }} />
+                  <motion.div
+                    key={candidate.id}
+                    className="h-full"
+                    style={{ backgroundColor: candidate.color, width: `${pct}%` }}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${pct}%` }}
+                    transition={{ type: "spring", stiffness: 120, damping: 20 }}
+                  />
                 );
               })}
             </div>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => setSettingsOpen((prev) => !prev)}
-              className="rounded-xl border border-white/15 bg-gradient-to-r from-slate-800 to-slate-700/50 px-4 py-2.5 text-sm font-semibold text-slate-200 shadow-lg transition-all hover:bg-slate-700">
+            <button
+              type="button"
+              onClick={() => setSettingsOpen((prev) => !prev)}
+              className="rounded-xl border border-white/15 bg-gradient-to-r from-slate-800 to-slate-700/50 px-4 py-2.5 text-sm font-semibold text-slate-200 shadow-lg transition-all hover:bg-slate-700"
+            >
               Candidatos
             </button>
-            <button type="button" onClick={() => setNationalPhotoOpen(true)}
-              className="rounded-xl bg-gradient-to-r from-violet-600 to-violet-700 px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition-all hover:scale-105">
+            <button
+              type="button"
+              onClick={() => setNationalPhotoOpen(true)}
+              className="rounded-xl bg-gradient-to-r from-violet-600 to-violet-700 px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition-all hover:scale-105"
+            >
               Foto Nacional
             </button>
-            <button type="button" onClick={() => setRegionalPhotoOpen(true)}
-              className="rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition-all hover:scale-105">
+            <button
+              type="button"
+              onClick={() => setRegionalPhotoOpen(true)}
+              className="rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition-all hover:scale-105"
+            >
               Foto Regional
             </button>
-            <button type="button" onClick={handleExport}
-              className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-300 shadow-lg transition-all hover:bg-emerald-500/20">
+            <button
+              type="button"
+              onClick={handleExport}
+              className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-300 shadow-lg transition-all hover:bg-emerald-500/20"
+            >
               Exportar
             </button>
-            <button type="button" onClick={() => importRef.current?.click()}
-              className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-2.5 text-sm font-semibold text-sky-300 shadow-lg transition-all hover:bg-sky-500/20">
+            <button
+              type="button"
+              onClick={() => importRef.current?.click()}
+              className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-2.5 text-sm font-semibold text-sky-300 shadow-lg transition-all hover:bg-sky-500/20"
+            >
               Importar
             </button>
-            <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
-            <button type="button" onClick={() => setResults({})}
-              className="rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-300 shadow-lg transition-all hover:bg-amber-500/20">
+            <input
+              ref={importRef}
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={handleImport}
+            />
+            <button
+              type="button"
+              onClick={() => setResults({})}
+              className="rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-300 shadow-lg transition-all hover:bg-amber-500/20"
+            >
               Limpar
             </button>
-            <button type="button" onClick={onRestart}
-              className="rounded-xl border border-red-500/35 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-300 shadow-lg transition-all hover:bg-red-500/20">
+            <button
+              type="button"
+              onClick={onRestart}
+              className="rounded-xl border border-red-500/35 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-300 shadow-lg transition-all hover:bg-red-500/20"
+            >
               Reiniciar
             </button>
           </div>
         </div>
       </header>
 
+      {/* ── Main ────────────────────────────────────────────────────────── */}
       <main className="mx-auto grid w-full max-w-[1800px] grid-cols-1 gap-6 px-4 py-6 xl:grid-cols-[320px_minmax(0,1fr)] xl:px-6">
         {/* Sidebar */}
         <aside className="max-h-[calc(100vh-180px)] overflow-y-auto rounded-2xl border border-white/10 bg-gradient-to-b from-slate-900/80 to-slate-900/40 p-4 shadow-2xl backdrop-blur-sm">
-          <h2 className="mb-4 text-sm font-black uppercase tracking-[0.18em] text-slate-400">Estados</h2>
+          <h2 className="mb-4 text-sm font-black uppercase tracking-[0.18em] text-slate-400">
+            Estados
+          </h2>
           <div className="space-y-1.5">
             {activeStates.map((state) => {
               const result = results[state.uf];
@@ -449,20 +569,33 @@ export function ElectionSimulator({
               const winnerPct = result?.winner ? result.votes[result.winner] : null;
               const isExcluded = result?.excluded;
               return (
-                <motion.button key={state.uf} type="button" whileHover={{ x: 4 }}
+                <motion.button
+                  key={state.uf}
+                  type="button"
+                  whileHover={{ x: 4 }}
                   onClick={() => setStateDialog({ uf: state.uf, view: "menu" })}
                   onMouseEnter={() => setHoveredState(state.uf)}
                   onMouseLeave={() => setHoveredState(null)}
-                  className={`group flex w-full items-center justify-between rounded-xl border border-transparent px-4 py-3 text-left transition-all hover:border-white/15 hover:bg-white/5 active:scale-[0.98] ${isExcluded ? "opacity-40" : ""}`}>
+                  className={`group flex w-full items-center justify-between rounded-xl border border-transparent px-4 py-3 text-left transition-all hover:border-white/15 hover:bg-white/5 active:scale-[0.98] ${
+                    isExcluded ? "opacity-40" : ""
+                  }`}
+                >
                   <div>
                     <div className="flex items-center gap-2">
                       <div className="text-sm font-bold text-slate-200">{state.name}</div>
-                      {isExcluded && <span className="text-[10px] font-black text-red-400 border border-red-400/30 rounded px-1">EXCLUÍDO</span>}
+                      {isExcluded && (
+                        <span className="text-[10px] font-black text-red-400 border border-red-400/30 rounded px-1">
+                          EXCLUÍDO
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs font-medium text-slate-500">{state.uf}</div>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm font-black" style={{ color: winner?.color || "#64748b" }}>
+                    <div
+                      className="text-sm font-black"
+                      style={{ color: winner?.color || "#64748b" }}
+                    >
                       {winnerPct ? formatPct(winnerPct) : "--"}
                     </div>
                     <div className="text-[11px] font-medium text-slate-500">
@@ -501,44 +634,77 @@ export function ElectionSimulator({
           </AnimatePresence>
 
           {/* Map */}
-          <div ref={mapContainerRef}
-            className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950 to-slate-900 shadow-2xl touch-none cursor-grab active:cursor-grabbing overscroll-contain">
+          <div
+            ref={mapContainerRef}
+            className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950 to-slate-900 shadow-2xl touch-none cursor-grab active:cursor-grabbing overscroll-contain"
+          >
             <div className="absolute right-4 bottom-4 z-20 flex flex-col gap-2">
               <div className="flex items-center gap-1 rounded-xl border border-white/15 bg-black/60 p-1 backdrop-blur-md shadow-2xl">
-                <button type="button" onClick={() => setMapZoom((prev) => clamp(prev - 0.2, 0.5, 5))}
-                  className="w-10 h-10 flex items-center justify-center rounded-lg bg-slate-800 text-xl font-bold text-white hover:bg-slate-700 active:scale-95 transition-all shadow-lg">-</button>
+                <button
+                  type="button"
+                  onClick={() => setMapZoom((prev) => clamp(prev - 0.2, 0.5, 5))}
+                  className="w-10 h-10 flex items-center justify-center rounded-lg bg-slate-800 text-xl font-bold text-white hover:bg-slate-700 active:scale-95 transition-all shadow-lg"
+                >
+                  -
+                </button>
                 <div className="min-w-[60px] text-center text-[10px] font-black tracking-tighter uppercase text-slate-400">
                   {Math.round(mapZoom * 100)}%
                 </div>
-                <button type="button" onClick={() => setMapZoom((prev) => clamp(prev + 0.2, 0.5, 5))}
-                  className="w-10 h-10 flex items-center justify-center rounded-lg bg-slate-800 text-xl font-bold text-white hover:bg-slate-700 active:scale-95 transition-all shadow-lg">+</button>
+                <button
+                  type="button"
+                  onClick={() => setMapZoom((prev) => clamp(prev + 0.2, 0.5, 5))}
+                  className="w-10 h-10 flex items-center justify-center rounded-lg bg-slate-800 text-xl font-bold text-white hover:bg-slate-700 active:scale-95 transition-all shadow-lg"
+                >
+                  +
+                </button>
               </div>
-              <button type="button" onClick={() => { setMapZoom(1); setMapOffset({ x: 0, y: 0 }); }}
-                className="rounded-xl border border-white/20 bg-black/60 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/10 backdrop-blur-md shadow-2xl active:scale-95 transition-all">
+              <button
+                type="button"
+                onClick={() => {
+                  setMapZoom(1);
+                  setMapOffset({ x: 0, y: 0 });
+                }}
+                className="rounded-xl border border-white/20 bg-black/60 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/10 backdrop-blur-md shadow-2xl active:scale-95 transition-all"
+              >
                 Centralizar
               </button>
             </div>
 
             {hoveredStateInfo && hoveredResult && (
-              <motion.div key={hoveredStateInfo.uf} initial={{ opacity: 0, y: -8, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+              <motion.div
+                key={hoveredStateInfo.uf}
+                initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                className="absolute left-4 top-4 z-20 w-72 rounded-2xl border border-white/15 bg-gradient-to-br from-black/80 to-black/60 px-4 py-4 shadow-2xl backdrop-blur-xl">
+                className="absolute left-4 top-4 z-20 w-72 rounded-2xl border border-white/15 bg-gradient-to-br from-black/80 to-black/60 px-4 py-4 shadow-2xl backdrop-blur-xl"
+              >
                 <div className="flex items-center justify-between mb-3">
-                  <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{hoveredStateInfo.name}</div>
-                  <div className="rounded-lg bg-white/10 px-2 py-0.5 text-xs font-bold text-white">{hoveredStateInfo.uf}</div>
+                  <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+                    {hoveredStateInfo.name}
+                  </div>
+                  <div className="rounded-lg bg-white/10 px-2 py-0.5 text-xs font-bold text-white">
+                    {hoveredStateInfo.uf}
+                  </div>
                 </div>
                 {Object.entries(hoveredResult.votes).map(([candidateId, pct]) => {
                   const candidate = candidateById[Number(candidateId)];
                   if (!candidate) return null;
                   return (
-                    <div key={candidateId} className="flex items-center justify-between text-sm py-1">
-                      <span className="font-semibold" style={{ color: candidate.color }}>{candidate.name}</span>
+                    <div
+                      key={candidateId}
+                      className="flex items-center justify-between text-sm py-1"
+                    >
+                      <span className="font-semibold" style={{ color: candidate.color }}>
+                        {candidate.name}
+                      </span>
                       <span className="font-black text-white">{formatPct(pct)}</span>
                     </div>
                   );
                 })}
                 {hoveredResult.excluded && (
-                  <div className="mt-2 text-xs font-black text-red-400 border border-red-400/30 rounded px-2 py-1">Excluído da contagem nacional</div>
+                  <div className="mt-2 text-xs font-black text-red-400 border border-red-400/30 rounded px-2 py-1">
+                    Excluído da contagem nacional
+                  </div>
                 )}
               </motion.div>
             )}
@@ -546,33 +712,52 @@ export function ElectionSimulator({
             {paths.length === 0 ? (
               <div className="flex h-[70vh] items-center justify-center text-slate-400">
                 <div className="text-center">
-                  <div className="mx-auto mb-4 h-16 w-16 animate-spin rounded-full border-4 border-slate-800 border-t-emerald-500 shadow-[0_0_30px_-5px_rgba(16,185,129,0.3)]"></div>
-                  <p className="text-sm font-black uppercase tracking-widest text-emerald-500/80 animate-pulse">Carregando mapa...</p>
+                  <div className="mx-auto mb-4 h-16 w-16 animate-spin rounded-full border-4 border-slate-800 border-t-emerald-500 shadow-[0_0_30px_-5px_rgba(16,185,129,0.3)]" />
+                  <p className="text-sm font-black uppercase tracking-widest text-emerald-500/80 animate-pulse">
+                    Carregando mapa...
+                  </p>
                 </div>
               </div>
             ) : (
               <div className="h-[70vh] w-full overflow-hidden">
-                <motion.div className="w-full h-full origin-center" drag dragConstraints={mapContainerRef} dragElastic={0.1}
+                <motion.div
+                  className="w-full h-full origin-center"
+                  drag
+                  dragConstraints={mapContainerRef}
+                  dragElastic={0.1}
                   style={{ x: mapOffset.x, y: mapOffset.y, scale: mapZoom }}
                   onDragEnd={(_event: unknown, info: { offset: { x: number; y: number } }) => {
-                    setMapOffset((prev) => ({ x: prev.x + info.offset.x, y: prev.y + info.offset.y }));
-                  }}>
-                  <svg viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} className="h-full w-full pointer-events-none"
-                    style={{ filter: "drop-shadow(0 20px 50px rgba(0,0,0,0.5))" }}>
+                    setMapOffset((prev) => ({
+                      x: prev.x + info.offset.x,
+                      y: prev.y + info.offset.y,
+                    }));
+                  }}
+                >
+                  <svg
+                    viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
+                    className="h-full w-full pointer-events-none"
+                    style={{ filter: "drop-shadow(0 20px 50px rgba(0,0,0,0.5))" }}
+                  >
                     {paths.map((pathItem) => {
                       const isHovered = hoveredState === pathItem.uf;
                       const result = results[pathItem.uf];
-                      const winnerColor = result?.winner ? candidateById[result.winner]?.color : null;
-                      const isActive = activeStates.find(s => s.uf === pathItem.uf);
+                      const winnerColor = result?.winner
+                        ? candidateById[result.winner]?.color
+                        : null;
+                      const isActive = activeStates.find((s) => s.uf === pathItem.uf);
                       return (
                         <g key={pathItem.uf} className="pointer-events-auto">
-                          <motion.path d={pathItem.d}
+                          <motion.path
+                            d={pathItem.d}
                             fill={isActive ? getStateFill(pathItem.uf) : "#0a0f1a"}
                             stroke={isHovered ? "#ffffff" : "#334155"}
                             strokeWidth={isHovered ? 2.5 : 1}
                             className="cursor-pointer transition-colors duration-200"
                             style={{
-                              filter: neonStates && isHovered && winnerColor ? `drop-shadow(0 0 15px ${winnerColor})` : "none",
+                              filter:
+                                neonStates && isHovered && winnerColor
+                                  ? `drop-shadow(0 0 15px ${winnerColor})`
+                                  : "none",
                               opacity: isActive ? 1 : 0.2,
                             }}
                             onMouseEnter={() => setHoveredState(pathItem.uf)}
@@ -580,11 +765,22 @@ export function ElectionSimulator({
                             onClick={() => {
                               if (isActive) setStateDialog({ uf: pathItem.uf, view: "menu" });
                             }}
-                            whileHover={{ scale: isActive ? 1.01 : 1 }} />
-                          <text x={pathItem.centroid[0]} y={pathItem.centroid[1]}
-                            className={`pointer-events-none select-none font-black ${isHovered ? "fill-white" : "fill-slate-400"}`}
-                            style={{ fontSize: "11px", textShadow: "0 1px 3px rgba(0,0,0,0.8)", opacity: mapZoom < 0.8 && !isHovered ? 0 : (isActive ? 1 : 0.3) }}
-                            textAnchor="middle">
+                            whileHover={{ scale: isActive ? 1.01 : 1 }}
+                          />
+                          <text
+                            x={pathItem.centroid[0]}
+                            y={pathItem.centroid[1]}
+                            className={`pointer-events-none select-none font-black ${
+                              isHovered ? "fill-white" : "fill-slate-400"
+                            }`}
+                            style={{
+                              fontSize: "11px",
+                              textShadow: "0 1px 3px rgba(0,0,0,0.8)",
+                              opacity:
+                                mapZoom < 0.8 && !isHovered ? 0 : isActive ? 1 : 0.3,
+                            }}
+                            textAnchor="middle"
+                          >
                             {pathItem.uf}
                           </text>
                         </g>
@@ -605,12 +801,16 @@ export function ElectionSimulator({
                 { id: "ranking", label: "🏆 Ranking de estados" },
                 { id: "candidatos", label: "🎯 Candidatos" },
               ].map((tab) => (
-                <button key={tab.id} type="button" onClick={() => setAnalyticsTab(tab.id as AnalyticsTab)}
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setAnalyticsTab(tab.id as AnalyticsTab)}
                   className={`relative overflow-hidden rounded-xl px-4 py-2.5 text-sm font-bold transition-all ${
                     analyticsTab === tab.id
                       ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/25"
                       : "bg-slate-800/60 text-slate-300 hover:bg-slate-700/80"
-                  }`}>
+                  }`}
+                >
                   {tab.label}
                 </button>
               ))}
@@ -620,13 +820,28 @@ export function ElectionSimulator({
             {analyticsTab === "regioes" && (
               <div className="space-y-4">
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => setRegionFocus(null)}
-                    className={`rounded-xl px-4 py-2.5 text-sm font-bold transition-all ${regionFocus === null ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg" : "bg-slate-800/60 text-slate-300 hover:bg-slate-700/80"}`}>
+                  <button
+                    type="button"
+                    onClick={() => setRegionFocus(null)}
+                    className={`rounded-xl px-4 py-2.5 text-sm font-bold transition-all ${
+                      regionFocus === null
+                        ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg"
+                        : "bg-slate-800/60 text-slate-300 hover:bg-slate-700/80"
+                    }`}
+                  >
                     Brasil inteiro
                   </button>
                   {regionalStats.map((row) => (
-                    <button type="button" key={row.region} onClick={() => setRegionFocus(row.region)}
-                      className={`rounded-xl px-4 py-2.5 text-sm font-bold transition-all ${regionFocus === row.region ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg" : "bg-slate-800/60 text-slate-300 hover:bg-slate-700/80"}`}>
+                    <button
+                      type="button"
+                      key={row.region}
+                      onClick={() => setRegionFocus(row.region)}
+                      className={`rounded-xl px-4 py-2.5 text-sm font-bold transition-all ${
+                        regionFocus === row.region
+                          ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg"
+                          : "bg-slate-800/60 text-slate-300 hover:bg-slate-700/80"
+                      }`}
+                    >
                       {row.region}
                     </button>
                   ))}
@@ -635,30 +850,70 @@ export function ElectionSimulator({
                 <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_1fr]">
                   <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950/80 to-slate-900/50 p-4 shadow-xl">
                     <div className="mb-3 text-sm font-bold text-slate-300">
-                      {regionFocus ? `Mapa da região ${regionFocus}` : "Mapa do Brasil por regiões"}
+                      {regionFocus
+                        ? `Mapa da região ${regionFocus}`
+                        : "Mapa do Brasil por regiões"}
                     </div>
                     <div className="relative overflow-hidden group">
-                      <svg viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} className="h-[420px] w-full transition-transform duration-500 group-hover:scale-[1.05]">
+                      <svg
+                        viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
+                        className="h-[420px] w-full transition-transform duration-500 group-hover:scale-[1.05]"
+                      >
                         {paths.map((pathItem) => {
                           const state = STATE_BY_UF[pathItem.uf];
                           if (!state) return null;
-                          const inFocus = regionFocus ? state.region === regionFocus : true;
-                          const isActive = !!activeStates.find(s => s.uf === pathItem.uf);
+                          const inFocus = regionFocus
+                            ? state.region === regionFocus
+                            : true;
+                          const isActive = !!activeStates.find(
+                            (s) => s.uf === pathItem.uf
+                          );
                           const result = results[pathItem.uf];
-                          const winnerColor = result?.winner ? candidateById[result.winner]?.color : null;
+                          const winnerColor = result?.winner
+                            ? candidateById[result.winner]?.color
+                            : null;
                           return (
                             <g key={pathItem.uf}>
-                              <path d={pathItem.d}
-                                fill={inFocus && isActive ? getStateFill(pathItem.uf) : "#020617"}
-                                stroke={inFocus && isActive ? (winnerColor ? winnerColor : "#1e293b") : "#0f172a"}
-                                strokeWidth={inFocus && isActive ? (winnerColor ? 1.5 : 1) : 0.2}
-                                className={`transition-all duration-500 ${inFocus && isActive ? "cursor-pointer" : "cursor-default"}`}
+                              <path
+                                d={pathItem.d}
+                                fill={
+                                  inFocus && isActive
+                                    ? getStateFill(pathItem.uf)
+                                    : "#020617"
+                                }
+                                stroke={
+                                  inFocus && isActive
+                                    ? winnerColor
+                                      ? winnerColor
+                                      : "#1e293b"
+                                    : "#0f172a"
+                                }
+                                strokeWidth={
+                                  inFocus && isActive
+                                    ? winnerColor
+                                      ? 1.5
+                                      : 1
+                                    : 0.2
+                                }
+                                className={`transition-all duration-500 ${
+                                  inFocus && isActive
+                                    ? "cursor-pointer"
+                                    : "cursor-default"
+                                }`}
                                 style={{ opacity: inFocus && isActive ? 1 : 0.3 }}
-                                onClick={() => { if (inFocus && isActive) setStateDialog({ uf: pathItem.uf, view: "menu" }); }} />
+                                onClick={() => {
+                                  if (inFocus && isActive)
+                                    setStateDialog({ uf: pathItem.uf, view: "menu" });
+                                }}
+                              />
                               {inFocus && isActive && (
-                                <text x={pathItem.centroid[0]} y={pathItem.centroid[1]}
+                                <text
+                                  x={pathItem.centroid[0]}
+                                  y={pathItem.centroid[1]}
                                   className="pointer-events-none select-none fill-white/80 text-[10px] font-black"
-                                  textAnchor="middle" style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}>
+                                  textAnchor="middle"
+                                  style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
+                                >
                                   {pathItem.uf}
                                 </text>
                               )}
@@ -670,27 +925,43 @@ export function ElectionSimulator({
                   </div>
 
                   <div className="space-y-3">
-                    {regionalStats.filter((row) => (regionFocus ? row.region === regionFocus : true)).map((row) => {
-                      const winner = row.winner ? candidateById[row.winner] : null;
-                      return (
-                        <motion.div key={row.region}
-                          className="rounded-xl border border-white/10 bg-gradient-to-br from-slate-800/50 to-slate-900/30 p-4 shadow-lg hover:shadow-xl transition-shadow"
-                          whileHover={{ scale: 1.02 }}>
-                          <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">{row.region}</div>
-                          <div className="mt-2 text-2xl font-black" style={{ color: winner?.color || "#a1a1aa" }}>
-                            {winner?.name || "Sem dados"}
-                          </div>
-                          <div className="mt-2 space-y-1">
-                            {candidates.map((c) => (
-                              <div key={c.id} className="flex items-center justify-between text-xs">
-                                <span style={{ color: c.color }}>{c.name}</span>
-                                <span className="font-bold text-slate-300">{formatPct(row.pcts[c.id] || 0)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </motion.div>
-                      );
-                    })}
+                    {regionalStats
+                      .filter((row) =>
+                        regionFocus ? row.region === regionFocus : true
+                      )
+                      .map((row) => {
+                        const winner = row.winner ? candidateById[row.winner] : null;
+                        return (
+                          <motion.div
+                            key={row.region}
+                            className="rounded-xl border border-white/10 bg-gradient-to-br from-slate-800/50 to-slate-900/30 p-4 shadow-lg hover:shadow-xl transition-shadow"
+                            whileHover={{ scale: 1.02 }}
+                          >
+                            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+                              {row.region}
+                            </div>
+                            <div
+                              className="mt-2 text-2xl font-black"
+                              style={{ color: winner?.color || "#a1a1aa" }}
+                            >
+                              {winner?.name || "Sem dados"}
+                            </div>
+                            <div className="mt-2 space-y-1">
+                              {candidates.map((c) => (
+                                <div
+                                  key={c.id}
+                                  className="flex items-center justify-between text-xs"
+                                >
+                                  <span style={{ color: c.color }}>{c.name}</span>
+                                  <span className="font-bold text-slate-300">
+                                    {formatPct(row.pcts[c.id] || 0)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </motion.div>
+                        );
+                      })}
                   </div>
                 </div>
               </div>
@@ -699,17 +970,29 @@ export function ElectionSimulator({
             {/* Tab: Desempenho */}
             {analyticsTab === "desempenho" && (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <motion.div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-800/60 to-slate-900/40 p-5 shadow-lg hover:shadow-xl transition-shadow" whileHover={{ scale: 1.02 }}>
+                <motion.div
+                  className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-800/60 to-slate-900/40 p-5 shadow-lg"
+                  whileHover={{ scale: 1.02 }}
+                >
                   <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500 flex items-center gap-2">
                     <span className="text-xl">👑</span> Liderança nacional
                   </div>
                   {sortedCandidates[0] && (
-                    <div className="mt-3 text-3xl font-black" style={{ color: sortedCandidates[0].color, textShadow: `0 0 40px ${sortedCandidates[0].color}40` }}>
+                    <div
+                      className="mt-3 text-3xl font-black"
+                      style={{
+                        color: sortedCandidates[0].color,
+                        textShadow: `0 0 40px ${sortedCandidates[0].color}40`,
+                      }}
+                    >
                       {sortedCandidates[0].name}
                     </div>
                   )}
                 </motion.div>
-                <motion.div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-800/60 to-slate-900/40 p-5 shadow-lg hover:shadow-xl transition-shadow" whileHover={{ scale: 1.02 }}>
+                <motion.div
+                  className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-800/60 to-slate-900/40 p-5 shadow-lg"
+                  whileHover={{ scale: 1.02 }}
+                >
                   <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500 flex items-center gap-2">
                     <span className="text-xl">🗺️</span> Estados vencidos
                   </div>
@@ -717,23 +1000,29 @@ export function ElectionSimulator({
                     {candidates.map((c) => (
                       <div key={c.id} className="flex items-center justify-between text-sm">
                         <span style={{ color: c.color }}>{c.name}</span>
-                        <span className="font-black text-white">{performanceStats.candidateWins[c.id] || 0}</span>
+                        <span className="font-black text-white">
+                          {performanceStats.candidateWins[c.id] || 0}
+                        </span>
                       </div>
                     ))}
                   </div>
                 </motion.div>
-                <motion.div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-800/60 to-slate-900/40 p-5 shadow-lg hover:shadow-xl transition-shadow" whileHover={{ scale: 1.02 }}>
+                <motion.div
+                  className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-800/60 to-slate-900/40 p-5 shadow-lg"
+                  whileHover={{ scale: 1.02 }}
+                >
                   <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500 flex items-center gap-2">
                     <span className="text-xl">📈</span> Margem média
                   </div>
                   <div className="mt-3 text-3xl font-black text-white drop-shadow-lg">
-                    {performanceStats.averageMargin.toFixed(2)} <span className="text-lg text-slate-400">pp</span>
+                    {performanceStats.averageMargin.toFixed(2)}{" "}
+                    <span className="text-lg text-slate-400">pp</span>
                   </div>
                 </motion.div>
               </div>
             )}
 
-            {/* Tab: Ranking de estados */}
+            {/* Tab: Ranking */}
             {analyticsTab === "ranking" && (
               <div className="space-y-2">
                 {activeStates.map((state, index) => {
@@ -741,9 +1030,13 @@ export function ElectionSimulator({
                   if (!result) return null;
                   const winner = result.winner ? candidateById[result.winner] : null;
                   return (
-                    <motion.div key={state.uf} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
+                    <motion.div
+                      key={state.uf}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: index * 0.02 }}
-                      className="group flex items-center justify-between rounded-xl border border-white/10 bg-gradient-to-r from-slate-800/50 to-slate-900/30 px-4 py-3 shadow-lg hover:shadow-xl transition-all hover:border-white/20 hover:scale-[1.01]">
+                      className="group flex items-center justify-between rounded-xl border border-white/10 bg-gradient-to-r from-slate-800/50 to-slate-900/30 px-4 py-3 shadow-lg hover:border-white/20 hover:scale-[1.01] transition-all"
+                    >
                       <div className="flex items-center gap-4">
                         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-slate-700 to-slate-800 text-lg font-black text-slate-400 ring-2 ring-white/10">
                           {index + 1}
@@ -755,15 +1048,25 @@ export function ElectionSimulator({
                       </div>
                       <div className="flex items-center gap-4">
                         {result.excluded && (
-                          <span className="text-[10px] font-black text-red-400 border border-red-400/30 rounded px-2 py-0.5">EXCLUÍDO</span>
+                          <span className="text-[10px] font-black text-red-400 border border-red-400/30 rounded px-2 py-0.5">
+                            EXCLUÍDO
+                          </span>
                         )}
                         <div className="text-right">
                           {winner && (
                             <>
-                              <div className="text-lg font-black" style={{ color: winner.color, textShadow: `0 0 20px ${winner.color}40` }}>
+                              <div
+                                className="text-lg font-black"
+                                style={{
+                                  color: winner.color,
+                                  textShadow: `0 0 20px ${winner.color}40`,
+                                }}
+                              >
                                 {winner.name}
                               </div>
-                              <div className="text-sm font-medium text-slate-400">{formatPct(result.votes[result.winner!])}</div>
+                              <div className="text-sm font-medium text-slate-400">
+                                {formatPct(result.votes[result.winner!])}
+                              </div>
                             </>
                           )}
                         </div>
@@ -782,10 +1085,12 @@ export function ElectionSimulator({
               </div>
             )}
 
-            {/* Tab: Candidatos — classificação geral */}
+            {/* Tab: Candidatos */}
             {analyticsTab === "candidatos" && (
               <div className="space-y-4">
-                <p className="text-xs text-slate-500 mb-2">Classificação nacional com base nos estados preenchidos.</p>
+                <p className="text-xs text-slate-500 mb-2">
+                  Classificação nacional com base nos estados preenchidos.
+                </p>
                 <div className="space-y-3">
                   {sortedCandidates.map((candidate, index) => {
                     const pct = national.candidatePcts[candidate.id] || 0;
@@ -801,47 +1106,74 @@ export function ElectionSimulator({
                         style={{ borderColor: `${candidate.color}30` }}
                       >
                         <div className="flex items-center gap-4">
-                          {/* Rank badge */}
                           <div
                             className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl text-2xl font-black text-white shadow-lg"
-                            style={{ backgroundColor: `${candidate.color}25`, border: `2px solid ${candidate.color}60` }}
+                            style={{
+                              backgroundColor: `${candidate.color}25`,
+                              border: `2px solid ${candidate.color}60`,
+                            }}
                           >
-                            {index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `#${index + 1}`}
+                            {index === 0
+                              ? "🥇"
+                              : index === 1
+                              ? "🥈"
+                              : index === 2
+                              ? "🥉"
+                              : `#${index + 1}`}
                           </div>
-
-                          {/* Photo */}
-                          <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-full border-2" style={{ borderColor: candidate.color }}>
+                          <div
+                            className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-full border-2"
+                            style={{ borderColor: candidate.color }}
+                          >
                             {candidate.photo ? (
-                              <img src={candidate.photo} alt={candidate.name} className="h-full w-full object-cover" />
+                              <img
+                                src={candidate.photo}
+                                alt={candidate.name}
+                                className="h-full w-full object-cover"
+                              />
                             ) : (
-                              <div className="flex h-full w-full items-center justify-center text-sm font-black" style={{ color: candidate.color }}>
+                              <div
+                                className="flex h-full w-full items-center justify-center text-sm font-black"
+                                style={{ color: candidate.color }}
+                              >
                                 {candidate.number}
                               </div>
                             )}
                           </div>
-
-                          {/* Info */}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xl font-black" style={{ color: candidate.color }}>{candidate.name}</span>
+                              <span
+                                className="text-xl font-black"
+                                style={{ color: candidate.color }}
+                              >
+                                {candidate.name}
+                              </span>
                               {candidate.ideology && (
-                                <span className="rounded-lg bg-slate-800 px-2 py-0.5 text-xs font-bold text-slate-400">{candidate.ideology}</span>
+                                <span className="rounded-lg bg-slate-800 px-2 py-0.5 text-xs font-bold text-slate-400">
+                                  {candidate.ideology}
+                                </span>
                               )}
                             </div>
-                            <div className="text-xs text-slate-500 mt-0.5">{candidate.party} · Vice: {candidate.vice}</div>
+                            <div className="text-xs text-slate-500 mt-0.5">
+                              {candidate.party} · Vice: {candidate.vice}
+                            </div>
                             {candidate.coalition && (
-                              <div className="text-xs text-slate-600 mt-0.5">🤝 {candidate.coalition}</div>
+                              <div className="text-xs text-slate-600 mt-0.5">
+                                🤝 {candidate.coalition}
+                              </div>
                             )}
                           </div>
-
-                          {/* Stats */}
                           <div className="flex items-center gap-6 flex-shrink-0">
                             <div className="text-center">
-                              <div className="text-3xl font-black text-white">{formatPct(pct)}</div>
+                              <div className="text-3xl font-black text-white">
+                                {formatPct(pct)}
+                              </div>
                               <div className="text-xs text-slate-500">Nacional</div>
                             </div>
                             <div className="text-center hidden md:block">
-                              <div className="text-xl font-black text-white">{Math.round(votes).toLocaleString("pt-BR")}</div>
+                              <div className="text-xl font-black text-white">
+                                {Math.round(votes).toLocaleString("pt-BR")}
+                              </div>
                               <div className="text-xs text-slate-500">Votos</div>
                             </div>
                             <div className="text-center hidden md:block">
@@ -850,15 +1182,18 @@ export function ElectionSimulator({
                             </div>
                           </div>
                         </div>
-
-                        {/* Bar */}
                         <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-800">
                           <motion.div
                             className="h-full rounded-full"
                             style={{ backgroundColor: candidate.color }}
                             initial={{ width: 0 }}
                             animate={{ width: `${pct}%` }}
-                            transition={{ type: "spring", stiffness: 100, damping: 20, delay: index * 0.05 }}
+                            transition={{
+                              type: "spring",
+                              stiffness: 100,
+                              damping: 20,
+                              delay: index * 0.05,
+                            }}
                           />
                         </div>
                       </motion.div>
@@ -866,11 +1201,22 @@ export function ElectionSimulator({
                   })}
                 </div>
 
-                {/* Total */}
                 <div className="mt-4 rounded-2xl border border-white/10 bg-slate-900/60 p-4 text-center">
-                  <div className="text-sm text-slate-500">Total de votos válidos contabilizados</div>
-                  <div className="text-3xl font-black text-white">{Math.round(national.totalVotes).toLocaleString("pt-BR")}</div>
-                  <div className="text-xs text-slate-500 mt-1">{national.statesCounted} de {totalActiveStates} estados preenchidos</div>
+                  <div className="text-sm text-slate-500">
+                    Total de votos válidos contabilizados
+                  </div>
+                  <div className="text-3xl font-black text-white">
+                    {Math.round(national.totalVotes).toLocaleString("pt-BR")}
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    {national.statesCounted} de {totalActiveStates} estados preenchidos
+                  </div>
+                  {loadedScenario?.nationalVoters && (
+                    <div className="text-xs text-violet-400 mt-1">
+                      Eleitorado nacional configurado:{" "}
+                      {loadedScenario.nationalVoters.toLocaleString("pt-BR")}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -878,7 +1224,7 @@ export function ElectionSimulator({
         </section>
       </main>
 
-      {/* Modals */}
+      {/* ── Modals ──────────────────────────────────────────────────────── */}
       <AnimatePresence>
         {selectedStateInfo && stateDialog?.view === "menu" && (
           <StateActionModal
@@ -888,7 +1234,9 @@ export function ElectionSimulator({
             onClose={() => setStateDialog(null)}
             onEdit={() => setStateDialog({ uf: selectedStateInfo.uf, view: "edit" })}
             onPhoto={() => setStateDialog({ uf: selectedStateInfo.uf, view: "photo" })}
-            onMunicipalityEdit={() => setStateDialog({ uf: selectedStateInfo.uf, view: "municipios" })}
+            onMunicipalityEdit={() =>
+              setStateDialog({ uf: selectedStateInfo.uf, view: "municipios" })
+            }
             onReset={() => handleResetState(selectedStateInfo.uf)}
           />
         )}

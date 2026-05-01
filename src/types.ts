@@ -74,5 +74,6 @@ export interface PoliticalScenario {
   candidates: Omit<Candidate, 'id'>[];
   results?: Record<string, Record<number, number>>;
   customStates?: CustomStateInfo[]; // para cenários personalizados
+  nationalVoters?: number; // eleitorado nacional total (distribui proporcionalmente por estado)
   isCustom?: boolean;
 }
