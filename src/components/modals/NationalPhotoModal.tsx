@@ -9,6 +9,10 @@ import {
   WinnerBoxControls,
   AvatarSizeControls,
   DEFAULT_WINNER_BOX,
+  captureAndDownload as savePhotoPng,
+  getCaptureFallbackColor,
+  getFrameSurfaceColor,
+  getPhotoBackgroundStyle,
   type PhotoCardShape,
   type WinnerBoxConfig,
 } from "../photo/PhotoCards";
@@ -16,7 +20,7 @@ import { NationalMapCenter } from "../photo/MapCenters";
 import type { Candidate, PathData, StateResult } from "../../types";
 
 // ─── Utilitário: captura o elemento e baixa como PNG ─────────────────────────
-async function captureAndDownload(
+export async function legacyCaptureAndDownload(
   element: HTMLElement,
   filename: string,
   bgColor: string,
@@ -129,51 +133,21 @@ export function NationalPhotoModal({
   }, [candidates, national]);
 
   // ── Estilos de background ──────────────────────────────────────────────
-  const isGradientBg = bgValue.startsWith("linear-gradient");
-
-  const bgStyle: React.CSSProperties = bgImage
-    ? {
-        backgroundImage: `url(${bgImage})`,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-      }
-    : isGradientBg
-    ? { background: bgValue }
-    : { backgroundColor: bgValue };
-
-  // Cor de fallback para html2canvas (quando usa gradiente ou imagem)
-  const bgFallbackColor =
-    bgImage || isGradientBg ? "#0f172a" : bgValue;
+  const bgStyle = getPhotoBackgroundStyle(bgValue, bgImage);
+  const bgFallbackColor = getCaptureFallbackColor(bgValue, bgImage);
+  const frameSurfaceColor = getFrameSurfaceColor(bgValue, bgImage);
 
   // ── Download ────────────────────────────────────────────────────────────
   const handleDownload = async () => {
     if (!captureRef.current) return;
-    await captureAndDownload(
+    await savePhotoPng(
       captureRef.current,
       `foto-nacional-${Date.now()}.png`,
-      bgFallbackColor,
-      bgImage
+      bgFallbackColor
     );
   };
 
   // ── Estilo do retângulo vencedores ─────────────────────────────────────
-  const winnerBoxStyle: React.CSSProperties = winnerBox.show
-    ? {
-        border: `${winnerBox.borderWidth}px solid ${winnerBox.color}`,
-        borderRadius: winnerBox.borderRadius,
-        padding: winnerBox.padding,
-        backgroundColor: winnerBox.color
-          .slice(0, 7)
-          .concat(
-            Math.round(
-              (parseInt(winnerBox.color.slice(7, 9) || "22", 16) / 255) * 30
-            )
-              .toString(16)
-              .padStart(2, "0")
-          ),
-      }
-    : {};
-
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -284,11 +258,8 @@ export function NationalPhotoModal({
             </div>
           </div>
 
-          {/* Top 2 candidatos + mapa — envoltos pelo retângulo configurável */}
-          <div
-            className="flex items-center justify-center gap-6 mb-8 flex-wrap md:flex-nowrap"
-            style={winnerBoxStyle}
-          >
+          {/* Top 2 candidatos + mapa */}
+          <div className="flex items-center justify-center gap-6 mb-8 flex-wrap md:flex-nowrap">
             {ranked.first && (
               <div className="flex-1 min-w-[220px]">
                 <TopCandidateCard
@@ -299,6 +270,8 @@ export function NationalPhotoModal({
                   showVice={true}
                   showVotes={true}
                   shape={cardShape}
+                  frameConfig={winnerBox}
+                  frameSurfaceColor={frameSurfaceColor}
                 />
               </div>
             )}
@@ -320,6 +293,8 @@ export function NationalPhotoModal({
                   showVice={true}
                   showVotes={true}
                   shape={cardShape}
+                  frameConfig={winnerBox}
+                  frameSurfaceColor={frameSurfaceColor}
                 />
               </div>
             )}

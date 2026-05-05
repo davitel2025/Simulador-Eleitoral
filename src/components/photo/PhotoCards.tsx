@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import type { RankedItem } from "../../types";
 import { formatPct } from "../../lib/utils";
 import { UserIcon } from "../UserIcon";
@@ -7,7 +8,8 @@ export type PhotoCardShape = "circle" | "portrait";
 // ─── Configuração do retângulo ao redor dos top candidatos ───────────────────
 export interface WinnerBoxConfig {
   show: boolean;
-  color: string;
+  backgroundMode: "same" | "custom" | "transparent";
+  backgroundColor: string;
   borderRadius: number; // px
   padding: number;      // px
   borderWidth: number;  // px
@@ -15,11 +17,77 @@ export interface WinnerBoxConfig {
 
 export const DEFAULT_WINNER_BOX: WinnerBoxConfig = {
   show: true,
-  color: "#ffffff22",
+  backgroundMode: "same",
+  backgroundColor: "#0f172a",
   borderRadius: 24,
-  padding: 12,
-  borderWidth: 2,
+  padding: 24,
+  borderWidth: 4,
 };
+
+export function getPhotoBackgroundStyle(
+  bgValue: string,
+  bgImage?: string
+): CSSProperties {
+  if (bgImage) {
+    return {
+      backgroundImage: `url(${bgImage})`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+    };
+  }
+
+  return bgValue.startsWith("linear-gradient")
+    ? { background: bgValue }
+    : { backgroundColor: bgValue };
+}
+
+export function getCaptureFallbackColor(bgValue: string, bgImage?: string): string {
+  return bgImage || bgValue.startsWith("linear-gradient") ? "#0f172a" : bgValue;
+}
+
+export function getFrameSurfaceColor(bgValue: string, bgImage?: string): string {
+  return bgImage || bgValue.startsWith("linear-gradient") ? "transparent" : bgValue;
+}
+
+export async function captureAndDownload(
+  element: HTMLElement,
+  filename: string,
+  backgroundColor: string
+): Promise<void> {
+  try {
+    const html2canvas = (await import("html2canvas")).default;
+    const canvas = await html2canvas(element, {
+      backgroundColor,
+      scale: Math.max(2, window.devicePixelRatio || 1),
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      imageTimeout: 15000,
+      scrollX: 0,
+      scrollY: -window.scrollY,
+      windowWidth: document.documentElement.scrollWidth,
+      windowHeight: document.documentElement.scrollHeight,
+    });
+
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+    if (!blob) {
+      alert("Erro ao gerar imagem. Tente novamente.");
+      return;
+    }
+
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) {
+    console.error("Erro ao gerar PNG:", error);
+    alert("Erro ao salvar imagem. Verifique o console para detalhes.");
+  }
+}
 
 // ─── TopCandidateCard ────────────────────────────────────────────────────────
 
@@ -31,6 +99,8 @@ export function TopCandidateCard({
   showVice = true,
   showVotes = false,
   shape = "circle",
+  frameConfig,
+  frameSurfaceColor = "#0f172a",
 }: {
   item: RankedItem;
   rank: number;
@@ -39,17 +109,36 @@ export function TopCandidateCard({
   showVice?: boolean;
   showVotes?: boolean;
   shape?: PhotoCardShape;
+  frameConfig?: WinnerBoxConfig;
+  frameSurfaceColor?: string;
 }) {
   const { candidate, pct, votes } = item;
+  const rankLabel = `${rank + 1}º colocado`;
 
   // Retrato: largura = 75% da altura
   const portraitH = portraitPx ?? Math.round(avatarPx * 1.18);
   const portraitW = Math.round(portraitH * 0.75);
+  const frameBackground =
+    frameConfig?.backgroundMode === "custom"
+      ? frameConfig.backgroundColor
+      : frameConfig?.backgroundMode === "same"
+      ? frameSurfaceColor
+      : "transparent";
+  const frameStyle: CSSProperties = frameConfig
+    ? {
+        borderColor: frameConfig.show ? candidate.color : "transparent",
+        borderRadius: frameConfig.borderRadius,
+        borderWidth: frameConfig.show ? frameConfig.borderWidth : 0,
+        backgroundColor: frameBackground,
+        padding: frameConfig.padding,
+      }
+    : { borderColor: `${candidate.color}40` };
 
   return (
     <div
       className="rounded-3xl border bg-slate-900/60 p-6 text-center flex flex-col items-center"
-      style={{ borderColor: `${candidate.color}40` }}
+      style={frameStyle}
+      aria-label={rankLabel}
     >
       {candidate.partyLogo && (
         <div className="mb-3 h-10 w-auto flex items-center justify-center">
@@ -408,7 +497,6 @@ export function WinnerBoxControls({
         Moldura
       </span>
 
-      {/* Toggle visibilidade */}
       <button
         type="button"
         onClick={() => onChange({ ...config, show: !config.show })}
@@ -421,42 +509,49 @@ export function WinnerBoxControls({
         {config.show ? "ON" : "OFF"}
       </button>
 
+      <div className="flex rounded-lg border border-white/10 bg-slate-950/60 p-0.5">
+        <button
+          type="button"
+          onClick={() => onChange({ ...config, backgroundMode: "same" })}
+          className={`rounded-md px-2 py-0.5 text-[10px] font-black ${
+            config.backgroundMode === "same" ? "bg-violet-600 text-white" : "text-slate-400"
+          }`}
+        >
+          BG
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange({ ...config, backgroundMode: "custom" })}
+          className={`rounded-md px-2 py-0.5 text-[10px] font-black ${
+            config.backgroundMode === "custom" ? "bg-violet-600 text-white" : "text-slate-400"
+          }`}
+        >
+          Cor
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange({ ...config, backgroundMode: "transparent" })}
+          className={`rounded-md px-2 py-0.5 text-[10px] font-black ${
+            config.backgroundMode === "transparent" ? "bg-violet-600 text-white" : "text-slate-400"
+          }`}
+        >
+          Sem
+        </button>
+      </div>
+
+      {config.backgroundMode === "custom" && (
+        <input
+          type="color"
+          value={config.backgroundColor}
+          onChange={(e) => onChange({ ...config, backgroundColor: e.target.value })}
+          className="h-5 w-5 rounded border border-slate-600 cursor-pointer"
+          style={{ padding: "1px" }}
+          title="Cor interna da moldura"
+        />
+      )}
+
       {config.show && (
         <>
-          {/* Cor */}
-          <div className="flex items-center gap-1">
-            <span className="text-[10px] text-slate-500">Cor</span>
-            <input
-              type="color"
-              value={config.color.startsWith("#") ? config.color : "#ffffff"}
-              onChange={(e) => onChange({ ...config, color: e.target.value })}
-              className="h-5 w-5 rounded border border-slate-600 cursor-pointer"
-              style={{ padding: "1px" }}
-            />
-            {/* Opacidade via hex alpha — slider simples de 0–100% */}
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={5}
-              value={Math.round(
-                parseInt(config.color.slice(7, 9) || "22", 16) / 2.55
-              )}
-              onChange={(e) => {
-                const alpha = Math.round((Number(e.target.value) / 100) * 255)
-                  .toString(16)
-                  .padStart(2, "0");
-                onChange({
-                  ...config,
-                  color: config.color.slice(0, 7) + alpha,
-                });
-              }}
-              className="h-1.5 w-16 appearance-none rounded-full bg-slate-700 accent-violet-400"
-              title="Opacidade"
-            />
-          </div>
-
-          {/* Border radius */}
           <div className="flex items-center gap-1">
             <span className="text-[10px] text-slate-500">Raio</span>
             <input
@@ -471,13 +566,12 @@ export function WinnerBoxControls({
             <span className="text-[10px] text-slate-500 w-6">{config.borderRadius}</span>
           </div>
 
-          {/* Padding */}
           <div className="flex items-center gap-1">
-            <span className="text-[10px] text-slate-500">Pad</span>
+            <span className="text-[10px] text-slate-500">Tam</span>
             <input
               type="range"
               min={0}
-              max={40}
+              max={72}
               step={4}
               value={config.padding}
               onChange={(e) => onChange({ ...config, padding: Number(e.target.value) })}
@@ -486,13 +580,12 @@ export function WinnerBoxControls({
             <span className="text-[10px] text-slate-500 w-6">{config.padding}</span>
           </div>
 
-          {/* Border width */}
           <div className="flex items-center gap-1">
             <span className="text-[10px] text-slate-500">Borda</span>
             <input
               type="range"
               min={0}
-              max={8}
+              max={12}
               step={1}
               value={config.borderWidth}
               onChange={(e) => onChange({ ...config, borderWidth: Number(e.target.value) })}

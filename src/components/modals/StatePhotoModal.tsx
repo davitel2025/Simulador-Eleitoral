@@ -1,13 +1,20 @@
 import { useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import html2canvas from "html2canvas";
 import {
   BottomCandidateCard,
   MapSizeSlider,
   OthersCard,
   TopCandidateCard,
   PhotoBackgroundPicker,
+  WinnerBoxControls,
+  AvatarSizeControls,
+  DEFAULT_WINNER_BOX,
+  captureAndDownload,
+  getCaptureFallbackColor,
+  getFrameSurfaceColor,
+  getPhotoBackgroundStyle,
   type PhotoCardShape,
+  type WinnerBoxConfig,
 } from "../photo/PhotoCards";
 import { StateMapCenter } from "../photo/MapCenters";
 import type { Candidate, StateInfo, StateResult } from "../../types";
@@ -25,7 +32,12 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
   const [localMapScale, setLocalMapScale] = useState(photoMapScale);
   const [showMunicipalityPaint, setShowMunicipalityPaint] = useState(result?.usesMunicipalities ?? false);
   const [bgValue, setBgValue] = useState("#0f172a");
+  const [bgImage, setBgImage] = useState<string | undefined>(undefined);
   const [cardShape, setCardShape] = useState<PhotoCardShape>("circle");
+  const [circleTopSize, setCircleTopSize] = useState(Math.round(150 * photoScale));
+  const [circleBottomSize, setCircleBottomSize] = useState(Math.round(80 * photoScale));
+  const [portraitTopSize, setPortraitTopSize] = useState(Math.round(150 * photoScale * 1.18));
+  const [winnerBox, setWinnerBox] = useState<WinnerBoxConfig>(DEFAULT_WINNER_BOX);
 
   const ranked = useMemo(() => {
     const rows = candidates
@@ -52,38 +64,18 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
   const winnerColor = winnerCandidate?.color ?? null;
   const winnerPct = ranked.first?.pct ?? 0;
 
-  const isGradientBg = bgValue.startsWith("linear-gradient");
-  const bgStyle = isGradientBg ? { background: bgValue } : { backgroundColor: bgValue };
+  const bgStyle = getPhotoBackgroundStyle(bgValue, bgImage);
+  const bgFallbackColor = getCaptureFallbackColor(bgValue, bgImage);
+  const frameSurfaceColor = getFrameSurfaceColor(bgValue, bgImage);
 
   const handleDownload = async () => {
     if (!captureRef.current) return;
-    try {
-      const canvas = await html2canvas(captureRef.current, {
-        backgroundColor: isGradientBg ? "#0f172a" : bgValue,
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        logging: false,
-      });
-      canvas.toBlob((blob: Blob | null) => {
-        if (!blob) return;
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
-        anchor.href = url;
-        anchor.download = `foto-estado-${stateInfo.uf}-${Date.now()}.png`;
-        document.body.appendChild(anchor);
-        anchor.click();
-        document.body.removeChild(anchor);
-        URL.revokeObjectURL(url);
-      }, "image/png");
-    } catch (error) {
-      console.error("Erro ao gerar imagem:", error);
-      alert("Erro ao salvar imagem. Tente novamente.");
-    }
+    await captureAndDownload(
+      captureRef.current,
+      `foto-estado-${stateInfo.uf}-${Date.now()}.png`,
+      bgFallbackColor
+    );
   };
-
-  const topAvatarPx = Math.round(150 * photoScale);
-  const bottomAvatarPx = Math.round(80 * photoScale);
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -113,7 +105,38 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
                 Com município
               </button>
             </div>
-            <PhotoBackgroundPicker value={bgValue} onChange={setBgValue} />
+            <AvatarSizeControls
+              circleSize={circleTopSize}
+              portraitSize={portraitTopSize}
+              onCircleChange={setCircleTopSize}
+              onPortraitChange={setPortraitTopSize}
+              shape={cardShape}
+            />
+            <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2">
+              <span className="text-xs font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">
+                Bola 2Âº
+              </span>
+              <input
+                type="range"
+                min={40}
+                max={160}
+                step={10}
+                value={circleBottomSize}
+                onChange={(e) => setCircleBottomSize(Number(e.target.value))}
+                className="h-2 w-20 appearance-none rounded-full bg-slate-700 accent-violet-500"
+              />
+              <span className="text-xs font-bold text-slate-400 w-10 text-right">
+                {circleBottomSize}px
+              </span>
+            </div>
+            <WinnerBoxControls config={winnerBox} onChange={setWinnerBox} />
+            <PhotoBackgroundPicker
+              value={bgValue}
+              onChange={setBgValue}
+              bgImage={bgImage}
+              onImageUpload={setBgImage}
+              onRemoveImage={() => setBgImage(undefined)}
+            />
             <MapSizeSlider value={localMapScale} onChange={setLocalMapScale} />
             <button type="button" onClick={handleDownload} className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-black text-zinc-950">Salvar PNG</button>
             <button type="button" onClick={onClose} className="rounded-xl border border-white/15 px-4 py-2 text-sm font-bold text-white">Fechar</button>
@@ -130,7 +153,17 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
           <div className="flex items-center justify-center gap-4 mb-8 flex-wrap md:flex-nowrap">
             {ranked.first && (
               <div className="flex-1 min-w-[220px]">
-                <TopCandidateCard item={ranked.first} rank={0} avatarPx={topAvatarPx} showVice={true} showVotes={true} shape={cardShape} />
+                <TopCandidateCard
+                  item={ranked.first}
+                  rank={0}
+                  avatarPx={circleTopSize}
+                  portraitPx={portraitTopSize}
+                  showVice={true}
+                  showVotes={true}
+                  shape={cardShape}
+                  frameConfig={winnerBox}
+                  frameSurfaceColor={frameSurfaceColor}
+                />
               </div>
             )}
             <StateMapCenter
@@ -144,7 +177,17 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
             />
             {ranked.second && (
               <div className="flex-1 min-w-[220px]">
-                <TopCandidateCard item={ranked.second} rank={1} avatarPx={topAvatarPx} showVice={true} showVotes={true} shape={cardShape} />
+                <TopCandidateCard
+                  item={ranked.second}
+                  rank={1}
+                  avatarPx={circleTopSize}
+                  portraitPx={portraitTopSize}
+                  showVice={true}
+                  showVotes={true}
+                  shape={cardShape}
+                  frameConfig={winnerBox}
+                  frameSurfaceColor={frameSurfaceColor}
+                />
               </div>
             )}
           </div>
@@ -153,9 +196,9 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
             <div className="flex justify-center">
               <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${ranked.bottom3.length + (ranked.hasOthers ? 1 : 0)}, minmax(0, 200px))` }}>
                 {ranked.bottom3.map((item) => (
-                  <BottomCandidateCard key={item.candidate.id} item={item} avatarPx={bottomAvatarPx} showVotes={true} shape={cardShape} />
+                  <BottomCandidateCard key={item.candidate.id} item={item} avatarPx={circleBottomSize} showVotes={true} />
                 ))}
-                {ranked.hasOthers && <OthersCard othersPct={ranked.othersPct} othersVotes={ranked.othersVotes} avatarPx={bottomAvatarPx} showVotes={true} />}
+                {ranked.hasOthers && <OthersCard othersPct={ranked.othersPct} othersVotes={ranked.othersVotes} avatarPx={circleBottomSize} showVotes={true} />}
               </div>
             </div>
           )}
