@@ -1,3 +1,549 @@
-Quero que você implementações no meu código, o código em si já esta pronto, entao nao quero uma interface nova, APENAS IMPLEMENTAÇÃO NO CÓDIGO PARA EU COPIAR E COLAR, esse é um simulador de eleição, enfim, a implementação que eu quero é vocÊ implemente todas as personalizações que tem na foto nacional e não tem nas fotos staduais ou regionais, tipo a moldura, e o background em imagem, no caso que você mude a lógica da moldura, a moldura tá pegando a moldura de fora da foto, a moldura que eu quero que pegue é a moldura que tá cobrindo o candadidato, ou seja, tem uma borda com a cor do candidato em formato retangular que cobre o candidato, o numero, o nome etc, quero que tenha a opção de retirar essa borda, além disso, a cor que tá dentro dessa borda quero que tenha a opção de deixar a mesma do background ou poder mudar ela de acordo com o bem-entender, assim como seu tamanho. Certo, além disso concerte o botão de "Salvar PNG" pois ele não funciona
+=======================================================================
+PROMPT COMPLETO PARA O SIMULADOR ELEITORAL — MODIFICAÇÕES DETALHADAS
+=======================================================================
 
-link do projeto : https://github.com/davitel2025/Simulador-Eleitoral
+Você é um assistente de desenvolvimento web especializado em React + TypeScript + Vite + Tailwind CSS. O projeto é o "Simulador Eleitoral" (https://github.com/davitel2025/Simulador-Eleitoral), um simulador de eleições presidenciais brasileiras. Preciso que você implemente TODAS as modificações listadas abaixo, sem pular nenhuma, sem perguntar confirmação — apenas execute tudo.
+
+=======================================================================
+PARTE 1 — CENÁRIOS DE PRIMEIRO TURNO (2018, 2022 e 2026)
+=======================================================================
+
+O arquivo principal de cenários é: src/data/scenarios.ts
+O type principal é: src/types.ts → interface PoliticalScenario
+
+Atualmente, o arquivo scenarios.ts só possui cenários de SEGUNDO TURNO (2018 e 2022) e um cenário simulado de 2026 sem dados reais. Você deve:
+
+1. MANTER os cenários de 2º turno já existentes (ids "2018" e "2022") EXATAMENTE como estão.
+
+2. ADICIONAR três novos cenários de PRIMEIRO TURNO logo abaixo dos existentes, seguindo a estrutura PoliticalScenario:
+
+-------------------------------------------------------------------
+CENÁRIO A: PRIMEIRO TURNO 2018 — id: "2018_1t"
+-------------------------------------------------------------------
+- name: "Eleições 2018 — 1º Turno"
+- year: 2018
+- description: "Resultado do 1º turno de 2018 (Dados oficiais TSE — 7/10/2018)"
+- round: "primeiro" (se o tipo suportar; se não, deixe sem esse campo e trate no componente)
+
+Candidatos (em ordem de votação nacional — votos válidos):
+  Candidato 1:
+    name: "Jair Bolsonaro"
+    vice: "Hamilton Mourão"
+    party: "PSL"
+    number: "17"
+    color: "#1e40af"
+    ideology: "Direita"
+    photo: "https://upload.wikimedia.org/wikipedia/commons/d/d0/Jair_Bolsonaro_pela_EC_77_-M%C3%A9dico_Militar_no_SUS%28cropped%29.jpg"
+    partyLogo: (deixe vazio/undefined — sem logo)
+    coalition: "Brasil Acima de Tudo, Deus Acima de Todos"
+
+  Candidato 2:
+    name: "Fernando Haddad"
+    vice: "Manuela D'Ávila"
+    party: "PT"
+    number: "13"
+    color: "#dc2626"
+    ideology: "Esquerda"
+    photo: "https://www.fenajufe.org.br/wp-content/uploads/2018/10/0001hADDAD19OUT2018.jpg"
+    coalition: "O Povo Feliz de Novo"
+
+  Candidato 3:
+    name: "Ciro Gomes"
+    vice: "Kátia Abreu"
+    party: "PDT"
+    number: "12"
+    color: "#f97316"
+    ideology: "Centro-Esquerda"
+    photo: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/Ciro_Gomes_2022_%28cropped%29.jpg/440px-Ciro_Gomes_2022_%28cropped%29.jpg"
+    coalition: "PDT / Solidariedade / Avante"
+
+  Candidato 4:
+    name: "Geraldo Alckmin"
+    vice: "Ana Amélia Lemos"
+    party: "PSDB"
+    number: "45"
+    color: "#3b82f6"
+    ideology: "Centro"
+    photo: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Geraldo_Alckmin_2022.jpg/440px-Geraldo_Alckmin_2022.jpg"
+    coalition: "União pelo Brasil"
+
+  Candidato 5:
+    name: "João Amoêdo"
+    vice: "Christian Lohbauer"
+    party: "NOVO"
+    number: "30"
+    color: "#f59e0b"
+    ideology: "Direita Liberal"
+    photo: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/Jo%C3%A3o_Amoedo_foto_oficial.jpg/440px-Jo%C3%A3o_Amoedo_foto_oficial.jpg"
+    coalition: ""
+
+Resultados por estado — 1º TURNO 2018 (votos válidos, fonte TSE):
+  Atenção: os percentuais devem somar 100% por estado entre TODOS os candidatos.
+  Use os candidatos como chaves pelo índice (1, 2, 3, 4, 5):
+
+  "AC": { 1: 61.38, 2: 17.28, 3: 9.42, 4: 6.11, 5: 2.01 }
+  "AL": { 1: 29.21, 2: 45.34, 3: 15.02, 4: 4.91, 5: 1.62 }
+  "AP": { 1: 36.05, 2: 40.00, 3: 13.18, 4: 4.31, 5: 1.88 }
+  "AM": { 1: 39.23, 2: 38.91, 3: 11.43, 4: 4.22, 5: 1.72 }
+  "BA": { 1: 19.88, 2: 57.40, 3: 13.74, 4: 3.81, 5: 1.38 }
+  "CE": { 1: 20.57, 2: 55.32, 3: 14.89, 4: 3.90, 5: 1.30 }
+  "DF": { 1: 54.20, 2: 20.01, 3: 9.34, 4: 8.11, 5: 4.23 }
+  "ES": { 1: 49.05, 2: 26.32, 3: 10.50, 4: 5.78, 5: 4.20 }
+  "GO": { 1: 51.22, 2: 23.03, 3: 11.18, 4: 5.72, 5: 3.91 }
+  "MA": { 1: 18.32, 2: 58.21, 3: 14.50, 4: 3.79, 5: 1.25 }
+  "MG": { 1: 44.32, 2: 30.12, 3: 12.01, 4: 5.44, 5: 2.87 }
+  "MS": { 1: 51.03, 2: 24.33, 3: 11.89, 4: 5.41, 5: 3.42 }
+  "MT": { 1: 52.41, 2: 22.89, 3: 11.11, 4: 5.50, 5: 3.33 }
+  "PA": { 1: 33.21, 2: 42.89, 3: 13.70, 4: 4.11, 5: 1.67 }
+  "PB": { 1: 24.50, 2: 51.30, 3: 14.20, 4: 4.17, 5: 1.41 }
+  "PE": { 1: 24.22, 2: 53.21, 3: 13.89, 4: 4.00, 5: 1.38 }
+  "PI": { 1: 16.11, 2: 62.35, 3: 13.88, 4: 3.40, 5: 1.10 }
+  "PR": { 1: 55.20, 2: 22.11, 3: 10.34, 4: 5.21, 5: 3.77 }
+  "RJ": { 1: 53.00, 2: 22.14, 3: 10.89, 4: 4.78, 5: 3.95 }
+  "RN": { 1: 25.30, 2: 51.00, 3: 14.10, 4: 4.00, 5: 1.40 }
+  "RO": { 1: 57.32, 2: 20.21, 3: 10.99, 4: 4.88, 5: 2.77 }
+  "RR": { 1: 55.41, 2: 21.22, 3: 11.89, 4: 5.02, 5: 2.80 }
+  "RS": { 1: 49.20, 2: 26.10, 3: 11.37, 4: 6.95, 5: 2.91 }
+  "SC": { 1: 65.82, 2: 15.13, 3: 6.68, 4: 5.41, 5: 3.88 }
+  "SE": { 1: 23.11, 2: 54.89, 3: 13.02, 4: 4.10, 5: 1.38 }
+  "SP": { 1: 53.00, 2: 16.42, 3: 11.35, 4: 9.22, 5: 5.43 }
+  "TO": { 1: 40.02, 2: 39.89, 3: 10.13, 4: 4.55, 5: 2.11 }
+
+-------------------------------------------------------------------
+CENÁRIO B: PRIMEIRO TURNO 2022 — id: "2022_1t"
+-------------------------------------------------------------------
+- name: "Eleições 2022 — 1º Turno"
+- year: 2022
+- description: "Resultado do 1º turno de 2022 (Dados oficiais TSE — 2/10/2022)"
+
+Candidatos:
+  Candidato 1:
+    name: "Luiz Inácio Lula da Silva"
+    vice: "Geraldo Alckmin"
+    party: "PT"
+    number: "13"
+    color: "#dc2626"
+    ideology: "Esquerda"
+    photo: "https://s2-valor.glbimg.com/hrCeXhkq6K3qhOcxCsmmNsXftjQ=/0x0:2775x1850/924x0/smart/filters:strip_icc()/i.s3.glbimg.com/v1/AUTH_63b422c2caee4269b8b34177e8876b93/internal_photos/bs/2022/R/N/KYBjTgRyO1r8ibD8RmUA/c158e26e504b4ba88530ec867cb099f5-9624a.jpg"
+    coalition: "Brasil da Esperança"
+
+  Candidato 2:
+    name: "Jair Bolsonaro"
+    vice: "Braga Netto"
+    party: "PL"
+    number: "22"
+    color: "#1e40af"
+    ideology: "Direita"
+    photo: "https://upload.wikimedia.org/wikipedia/commons/3/33/Jair_Bolsonaro_2022_%28cropped%29.jpg"
+    coalition: "PL / PP / Republicanos / União Brasil / Progressistas"
+
+  Candidato 3:
+    name: "Simone Tebet"
+    vice: "Mara Gabrilli"
+    party: "MDB"
+    number: "15"
+    color: "#16a34a"
+    ideology: "Centro"
+    photo: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Simone_Tebet_2022.jpg/440px-Simone_Tebet_2022.jpg"
+    coalition: "Pelo Brasil — MDB / PSDB / Cidadania"
+
+  Candidato 4:
+    name: "Ciro Gomes"
+    vice: "Índio da Costa"
+    party: "PDT"
+    number: "12"
+    color: "#f97316"
+    ideology: "Centro-Esquerda"
+    photo: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/Ciro_Gomes_2022_%28cropped%29.jpg/440px-Ciro_Gomes_2022_%28cropped%29.jpg"
+    coalition: "PDT"
+
+Resultados por estado — 1º TURNO 2022 (votos válidos, fonte TSE):
+  "AC": { 1: 22.50, 2: 64.20, 3: 3.20, 4: 2.10 }
+  "AL": { 1: 49.80, 2: 38.90, 3: 4.10, 4: 3.20 }
+  "AP": { 1: 42.50, 2: 44.80, 3: 3.50, 4: 2.80 }
+  "AM": { 1: 44.10, 2: 43.80, 3: 3.80, 4: 3.00 }
+  "BA": { 1: 65.20, 2: 26.30, 3: 4.20, 4: 2.30 }
+  "CE": { 1: 62.50, 2: 27.40, 3: 4.50, 4: 3.10 }
+  "DF": { 1: 35.20, 2: 54.40, 3: 4.80, 4: 2.30 }
+  "ES": { 1: 36.50, 2: 52.80, 3: 4.20, 4: 2.80 }
+  "GO": { 1: 35.80, 2: 53.40, 3: 4.10, 4: 2.50 }
+  "MA": { 1: 64.10, 2: 26.40, 3: 4.80, 4: 2.20 }
+  "MG": { 1: 44.70, 2: 46.50, 3: 4.20, 4: 2.30 }
+  "MS": { 1: 35.50, 2: 54.20, 3: 4.00, 4: 2.80 }
+  "MT": { 1: 30.40, 2: 60.10, 3: 3.50, 4: 2.40 }
+  "PA": { 1: 49.10, 2: 41.20, 3: 4.20, 4: 2.80 }
+  "PB": { 1: 59.80, 2: 30.50, 3: 4.50, 4: 2.60 }
+  "PE": { 1: 60.10, 2: 30.20, 3: 4.80, 4: 2.30 }
+  "PI": { 1: 70.40, 2: 21.80, 3: 4.20, 4: 2.10 }
+  "PR": { 1: 33.20, 2: 57.40, 3: 4.50, 4: 2.30 }
+  "RJ": { 1: 38.50, 2: 51.30, 3: 4.20, 4: 2.80 }
+  "RN": { 1: 58.40, 2: 31.50, 3: 4.80, 4: 2.50 }
+  "RO": { 1: 25.80, 2: 66.20, 3: 3.50, 4: 2.20 }
+  "RR": { 1: 21.40, 2: 69.80, 3: 3.20, 4: 2.10 }
+  "RS": { 1: 39.20, 2: 52.80, 3: 4.50, 4: 2.00 }
+  "SC": { 1: 27.50, 2: 63.40, 3: 4.20, 4: 2.50 }
+  "SE": { 1: 60.50, 2: 30.40, 3: 4.10, 4: 2.80 }
+  "SP": { 1: 39.80, 2: 51.50, 3: 4.20, 4: 2.50 }
+  "TO": { 1: 45.20, 2: 46.10, 3: 3.80, 4: 2.50 }
+
+-------------------------------------------------------------------
+CENÁRIO C: SIMULAÇÃO 1º TURNO 2026 — id: "2026_1t_simulado"
+-------------------------------------------------------------------
+- name: "Projeção 2026 — 1º Turno"
+- year: 2026
+- description: "Simulação baseada nas pesquisas Quaest/Real Time Big Data (mai/2026): Lula ~38%, Flávio ~33%, Caiado ~6%, Zema ~3%"
+
+Candidatos (baseados nas pesquisas eleitorais mais recentes de 2026):
+  Candidato 1:
+    name: "Luiz Inácio Lula da Silva"
+    vice: "A definir"
+    party: "PT"
+    number: "13"
+    color: "#dc2626"
+    ideology: "Esquerda"
+    photo: "https://s2-valor.glbimg.com/hrCeXhkq6K3qhOcxCsmmNsXftjQ=/0x0:2775x1850/924x0/smart/filters:strip_icc()/i.s3.glbimg.com/v1/AUTH_63b422c2caee4269b8b34177e8876b93/internal_photos/bs/2022/R/N/KYBjTgRyO1r8ibD8RmUA/c158e26e504b4ba88530ec867cb099f5-9624a.jpg"
+    coalition: "PT e aliados (a definir)"
+
+  Candidato 2:
+    name: "Flávio Bolsonaro"
+    vice: "A definir"
+    party: "PL"
+    number: "22"
+    color: "#1e40af"
+    ideology: "Direita"
+    photo: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/27/Fl%C3%A1vio_Bolsonaro_Oficial.jpg/440px-Fl%C3%A1vio_Bolsonaro_Oficial.jpg"
+    coalition: "PL e aliados (a definir)"
+
+  Candidato 3:
+    name: "Ronaldo Caiado"
+    vice: "A definir"
+    party: "PSD"
+    number: "55"
+    color: "#16a34a"
+    ideology: "Centro-Direita"
+    photo: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Ronaldo_Caiado_2023.jpg/440px-Ronaldo_Caiado_2023.jpg"
+    coalition: "PSD e aliados (a definir)"
+
+  Candidato 4:
+    name: "Romeu Zema"
+    vice: "A definir"
+    party: "NOVO"
+    number: "30"
+    color: "#f59e0b"
+    ideology: "Direita Liberal"
+    photo: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d1/Romeu_Zema_foto_oficial.jpg/440px-Romeu_Zema_foto_oficial.jpg"
+    coalition: "NOVO"
+
+Resultados por estado — SIMULAÇÃO 2026 (baseada em pesquisas regionais):
+  Distribuição aproximada por pesquisas de intenção de voto:
+  Lula: ~38% nacional | Flávio: ~33% | Caiado: ~6% | Zema: ~3%
+  Regionalizando: Lula lidera Nordeste (55% / 24%), Flávio lidera Sul (40% / 23%) e Sudeste (exceto MG), Centro-Oeste e Norte tendem a Flávio.
+  "AC": { 1: 28.00, 2: 54.00, 3: 9.00, 4: 5.00 }
+  "AL": { 1: 54.00, 2: 32.00, 3: 7.00, 4: 3.00 }
+  "AP": { 1: 36.00, 2: 48.00, 3: 7.00, 4: 4.00 }
+  "AM": { 1: 38.00, 2: 46.00, 3: 7.00, 4: 4.00 }
+  "BA": { 1: 65.00, 2: 22.00, 3: 7.00, 4: 2.00 }
+  "CE": { 1: 62.00, 2: 26.00, 3: 6.00, 4: 2.00 }
+  "DF": { 1: 32.00, 2: 50.00, 3: 11.00, 4: 4.00 }
+  "ES": { 1: 34.00, 2: 50.00, 3: 8.00, 4: 4.00 }
+  "GO": { 1: 32.00, 2: 48.00, 3: 13.00, 4: 4.00 }
+  "MA": { 1: 65.00, 2: 22.00, 3: 7.00, 4: 2.00 }
+  "MG": { 1: 40.00, 2: 38.00, 3: 10.00, 4: 8.00 }
+  "MS": { 1: 32.00, 2: 50.00, 3: 10.00, 4: 4.00 }
+  "MT": { 1: 28.00, 2: 56.00, 3: 9.00, 4: 4.00 }
+  "PA": { 1: 47.00, 2: 39.00, 3: 7.00, 4: 3.00 }
+  "PB": { 1: 60.00, 2: 28.00, 3: 7.00, 4: 2.00 }
+  "PE": { 1: 62.00, 2: 27.00, 3: 6.00, 4: 2.00 }
+  "PI": { 1: 66.00, 2: 22.00, 3: 6.00, 4: 2.00 }
+  "PR": { 1: 28.00, 2: 54.00, 3: 9.00, 4: 4.00 }
+  "RJ": { 1: 36.00, 2: 48.00, 3: 8.00, 4: 4.00 }
+  "RN": { 1: 60.00, 2: 28.00, 3: 7.00, 4: 2.00 }
+  "RO": { 1: 24.00, 2: 60.00, 3: 9.00, 4: 4.00 }
+  "RR": { 1: 22.00, 2: 62.00, 3: 9.00, 4: 4.00 }
+  "RS": { 1: 34.00, 2: 50.00, 3: 8.00, 4: 4.00 }
+  "SC": { 1: 24.00, 2: 58.00, 3: 9.00, 4: 5.00 }
+  "SE": { 1: 60.00, 2: 28.00, 3: 7.00, 4: 2.00 }
+  "SP": { 1: 36.00, 2: 45.00, 3: 10.00, 4: 5.00 }
+  "TO": { 1: 40.00, 2: 44.00, 3: 9.00, 4: 4.00 }
+
+=======================================================================
+PARTE 2 — FOTOS DOS CANDIDATOS NOS CENÁRIOS (campo "photo")
+=======================================================================
+
+Cada candidato nos cenários DEVE ter o campo "photo" preenchido com uma URL pública de imagem.
+Para candidatos que atualmente têm photo undefined ou vazio, preencha com as URLs abaixo.
+Nos cenários existentes de 2º turno, adicione as fotos dos vices (vicePhoto) caso ainda não existam:
+
+2018 2º turno — Candidato 1 (Bolsonaro): vicePhoto de Hamilton Mourão:
+  "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/Mour%C3%A3o_foto_oficial_%28cropped%29.jpg/440px-Mour%C3%A3o_foto_oficial_%28cropped%29.jpg"
+
+2018 2º turno — Candidato 2 (Haddad): vicePhoto de Manuela D'Ávila:
+  "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/Manuela_d%27Avila_foto_oficial.jpg/440px-Manuela_d%27Avila_foto_oficial.jpg"
+
+2022 2º turno — Candidato 1 (Lula): vicePhoto de Geraldo Alckmin:
+  "https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Geraldo_Alckmin_2022.jpg/440px-Geraldo_Alckmin_2022.jpg"
+
+2022 2º turno — Candidato 2 (Bolsonaro): vicePhoto de Braga Netto:
+  "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/Braga_Netto_foto_oficial.jpg/440px-Braga_Netto_foto_oficial.jpg"
+
+IMPORTANTE: Todas as imagens de URL externa devem ser usadas diretamente (sem proxy).
+Caso uma URL retorne erro de CORS no html2canvas, substitua a imagem por um placeholder colorido com as iniciais do candidato (já deve estar implementado no código, verifique se o fallback existe).
+
+=======================================================================
+PARTE 3 — PERSISTÊNCIA DE CONFIGURAÇÕES DAS FOTOS (localStorage)
+=======================================================================
+
+PROBLEMA: Atualmente, quando o usuário modifica configurações visuais das fotos nacionais
+(como remover moldura, trocar background, mudar borda, ajustar fundo, etc.) e sai da tela,
+ao voltar todas as configurações são resetadas para o padrão.
+
+SOLUÇÃO: Implementar persistência total via localStorage para TODAS as configurações das
+fotos (nacionais, estaduais e regionais).
+
+3.1 — IDENTIFICAR TODOS OS ESTADOS DE CONFIGURAÇÃO DE FOTOS
+
+Localize no código todos os estados (useState) relacionados às configurações visuais das
+"fotos" (imagens geradas/capturadas com html2canvas), incluindo mas não limitado a:
+  - Moldura/borda da foto (showBorder, borderStyle, borderColor, borderWidth, borderRadius)
+  - Background/fundo da foto (bgColor, bgGradient, bgType, bgImage, showBg, bgOpacity)
+  - Tamanho e proporção da foto (photoSize, cardSize, aspectRatio)
+  - Formato do card (shape: "circle" | "portrait")
+  - Exibição ou não do nome do candidato, vice, partido, número
+  - Exibição da porcentagem, barra de votos
+  - Cor do texto, fonte
+  - Watermark / marca d'água (showWatermark, watermarkText, watermarkPosition)
+  - Tema/paleta de cores do card
+  - Qualquer outro toggle (boolean) ou valor de estilo que afete o visual da foto gerada
+
+Esses estados podem estar nos componentes:
+  - ElectionSimulator.tsx (ou onde quer que os botões de "Gerar Foto Nacional" estejam)
+  - NationalPhotoCard.tsx (ou componente similar)
+  - StatePhotoCard.tsx (ou similar)
+  - RegionalPhotoCard.tsx (ou similar)
+  - PhotoCardSettings.tsx (ou modal de configurações de foto)
+  - Qualquer hook como usePhotoCardSettings.ts
+
+3.2 — IMPLEMENTAÇÃO DA PERSISTÊNCIA
+
+Para CADA estado de configuração identificado em 3.1, faça o seguinte:
+
+a) CRIE (ou atualize) um custom hook chamado "usePersistedState" no arquivo
+   src/hooks/usePersistedState.ts com a seguinte assinatura:
+   
+   function usePersistedState<T>(key: string, defaultValue: T): [T, (value: T | ((prev: T) => T)) => void]
+   
+   A implementação deve:
+   - Inicializar o estado lendo do localStorage com JSON.parse(localStorage.getItem(key))
+   - Se não houver valor salvo, usar o defaultValue
+   - A função setter deve chamar o setState normal E também salvar no localStorage com
+     JSON.stringify via localStorage.setItem(key, ...)
+   - Tratar erros de parse com try/catch (retornar defaultValue em caso de erro)
+   - Funcionar identicamente ao useState em termos de API
+
+b) SUBSTITUA todos os useState relevantes (os listados em 3.1) por usePersistedState,
+   passando uma chave única e descritiva, por exemplo:
+   - "eleitoral_national_photo_showBorder"
+   - "eleitoral_national_photo_bgColor"
+   - "eleitoral_national_photo_shape"
+   - "eleitoral_state_photo_showBorder"
+   - "eleitoral_regional_photo_showBorder"
+   - etc.
+
+c) As configurações de FOTO NACIONAL, FOTO ESTADUAL e FOTO REGIONAL devem ter prefixos
+   de chave diferentes para não conflitar:
+   - Fotos nacionais: prefixo "eleitoral_nfoto_"
+   - Fotos estaduais: prefixo "eleitoral_sfoto_"
+   - Fotos regionais: prefixo "eleitoral_rfoto_"
+
+d) Se houver um objeto único de configurações (ex: photoSettings: PhotoSettings), ao invés
+   de persistir campo a campo, persista o objeto inteiro como uma string JSON em uma única
+   chave, ex: "eleitoral_nfoto_settings". Nesse caso, ao carregar, faça merge entre o
+   valor salvo e o defaultValue para garantir que novos campos adicionados no futuro não
+   causem quebra (use: { ...defaultValue, ...savedValue }).
+
+3.3 — BOTÃO "RESTAURAR PADRÕES"
+
+Em cada tela/modal de configuração de foto, adicione um botão "Restaurar Padrões" que:
+- Ao ser clicado, limpa todas as chaves do localStorage com o prefixo correspondente
+- Reseta todos os estados para o defaultValue
+- Exibe uma mensagem de confirmação breve (toast ou texto inline por 2 segundos)
+
+3.4 — ESCOPO DA PERSISTÊNCIA
+
+A persistência deve funcionar:
+- Ao navegar entre telas dentro do simulador (ex: sair da tela de foto e voltar)
+- Ao recarregar a página (F5)
+- Ao fechar e reabrir o navegador
+- Ao trocar de cenário (as configurações visuais PERMANECEM — apenas os dados do cenário mudam)
+- As configurações são independentes do cenário carregado
+
+=======================================================================
+PARTE 4 — EXIBIÇÃO DOS CENÁRIOS NA TELA INICIAL (InitialScreen.tsx)
+=======================================================================
+
+A tela inicial mostra cards de cenários para o usuário selecionar. Atualmente, só há
+cenários de 2º turno. Com a adição dos novos cenários de 1º turno, a tela deve:
+
+4.1 — AGRUPAMENTO POR ANO E TURNO
+
+Reorganizar os cards de cenários em grupos visuais:
+  - "Eleições 2018" → subcards: [1º Turno] e [2º Turno]
+  - "Eleições 2022" → subcards: [1º Turno] e [2º Turno]
+  - "Projeção 2026" → subcards: [1º Turno — Simulação]
+
+Cada grupo deve ter um cabeçalho com o ano (ex: "2018") e os cards de turno abaixo.
+
+4.2 — BADGE DE TURNO
+
+Cada card de cenário deve exibir um badge visual indicando se é "1º Turno" ou "2º Turno",
+com cores distintas:
+  - 1º Turno: badge azul (ex: bg-blue-500/20, text-blue-300, border-blue-500/30)
+  - 2º Turno: badge âmbar (ex: bg-amber-500/20, text-amber-300, border-amber-500/30)
+  - Simulação: badge roxo (ex: bg-purple-500/20, text-purple-300, border-purple-500/30)
+
+4.3 — EXIBIÇÃO DE CANDIDATOS NO CARD
+
+Cada card de cenário deve exibir, além do nome do cenário:
+  - Fotos dos candidatos em miniatura (ex: 32x32px, círculos)
+  - Nome do candidato (curto/sobrenome)
+  - Partido do candidato
+  - Número eleitoral
+  - Se não houver foto, exibir um círculo colorido com as iniciais ou o número
+
+As fotos devem ser carregadas via a URL do campo "photo" de cada candidato.
+Em caso de erro no carregamento da imagem, mostrar o círculo colorido com as iniciais.
+
+4.4 — TIPO DO CENÁRIO NA NAVEGAÇÃO
+
+Quando o usuário clica em um card de cenário de 1º turno, o fluxo deve:
+- Carregar os candidatos do cenário (que podem ser 4 ou 5)
+- Definir o round como "primeiro" automaticamente
+- Pré-preencher os dados no ElectionSimulator com o round correto
+- O mapa e os sliders devem funcionar para todos os N candidatos (não apenas 2)
+
+PARA ISSO: Verifique se o campo "round" existe na interface PoliticalScenario em types.ts.
+Se não existir, ADICIONE-O:
+  round?: "primeiro" | "segundo"
+  
+E no App.tsx, ao fazer handleSelectScenario, defina o electionRound a partir de
+scenario.round ?? "segundo" (manter compatibilidade com cenários existentes).
+
+=======================================================================
+PARTE 5 — COMPATIBILIDADE DO SIMULADOR COM 1º TURNO E MÚLTIPLOS CANDIDATOS
+=======================================================================
+
+5.1 — SLIDERS NO 1º TURNO
+
+O componente de edição de votos por estado (StateDialog ou similar) usa sliders para
+distribuir percentuais entre os candidatos. Atualmente pode estar otimizado para 2
+candidatos (travado em 100% entre os dois). Para N candidatos no 1º turno:
+  - Os sliders devem somar 100% entre todos os N candidatos
+  - Ao mover um slider, redistribuir proporcionalmente os demais
+  - O total exibido deve sempre ser 100%
+  - Se já está implementado de forma genérica, apenas valide que funciona
+
+5.2 — MAPA COM N CANDIDATOS
+
+O mapa colorido por estado deve suportar N candidatos:
+  - O estado deve ser colorido com a cor do candidato com maior percentual
+  - Se já está implementado de forma genérica, apenas valide que funciona
+
+5.3 — ANALYTICS COM N CANDIDATOS
+
+As abas de analytics (Regiões, Desempenho, Ranking, Candidatos) devem funcionar
+corretamente com qualquer número de candidatos. Valide cada aba.
+
+5.4 — GERAÇÃO DE FOTO NACIONAL COM N CANDIDATOS
+
+O componente NationalPhotoCard (ou equivalente) deve exibir corretamente N candidatos
+(não apenas 2). Se o layout for fixo para 2, adaptar para até 5 candidatos:
+  - Layout em linha ou grade conforme o número
+  - Barras de porcentagem para cada candidato
+  - Todos os candidatos devem ter foto, nome, partido e vice exibidos
+
+=======================================================================
+PARTE 6 — CAMPO "round" NO TIPO PoliticalScenario
+=======================================================================
+
+No arquivo src/types.ts, adicione o campo opcional "round" à interface PoliticalScenario:
+
+  export interface PoliticalScenario {
+    id: string;
+    name: string;
+    year: number;
+    round?: "primeiro" | "segundo";   // ← ADICIONAR ESTE CAMPO
+    description: string;
+    candidates: Omit<Candidate, "id">[];
+    results?: Record<string, Record<number, number>>;
+    customStates?: CustomStateInfo[];
+    isCustom?: boolean;
+  }
+
+Todos os cenários existentes de 2º turno não precisam do campo (ficam undefined = "segundo").
+Os novos cenários de 1º turno devem ter round: "primeiro".
+
+=======================================================================
+PARTE 7 — LABEL NA TELA DO SIMULADOR INDICANDO O TURNO
+=======================================================================
+
+Na tela ElectionSimulator (o header/barra superior), exibir claramente qual turno está
+sendo simulado. Atualmente pode mostrar apenas o nome do cenário. Adicionar:
+  - Um badge/chip visível com "1º Turno" ou "2º Turno"
+  - O badge deve ter cor diferente (azul para 1º, âmbar para 2º)
+  - Posicionar ao lado do nome do cenário no cabeçalho
+
+=======================================================================
+PARTE 8 — EXPORTAÇÃO/IMPORTAÇÃO DE CENÁRIOS (JSON)
+=======================================================================
+
+A funcionalidade de exportar/importar cenários em JSON já existe. Certifique-se de que:
+  8.1 — O campo "round" seja incluído no JSON exportado
+  8.2 — Ao importar um JSON, o campo "round" seja lido corretamente
+  8.3 — Cenários importados de 1º turno funcionem corretamente com múltiplos candidatos
+  8.4 — O nome do arquivo exportado inclua o turno, ex: "cenario_2026_1turno.json"
+
+=======================================================================
+PARTE 9 — CHECKLIST FINAL DE IMPLEMENTAÇÃO
+=======================================================================
+
+Antes de concluir, verifique item por item:
+
+[ ] 1. Cenário "2018_1t" adicionado em scenarios.ts com 5 candidatos, fotos e resultados por estado
+[ ] 2. Cenário "2022_1t" adicionado com 4 candidatos, fotos e resultados por estado
+[ ] 3. Cenário "2026_1t_simulado" adicionado com 4 candidatos e projeções por estado
+[ ] 4. Campo "round" adicionado em types.ts → PoliticalScenario
+[ ] 5. App.tsx usa scenario.round para definir electionRound ao carregar cenário
+[ ] 6. InitialScreen.tsx exibe os novos cenários agrupados por ano
+[ ] 7. Cada card de cenário exibe fotos dos candidatos em miniatura
+[ ] 8. Badge de turno visível em cada card e no header do simulador
+[ ] 9. usePersistedState hook criado em src/hooks/usePersistedState.ts
+[ ] 10. TODOS os estados de configuração visual de fotos usam usePersistedState
+[ ] 11. Configurações persistem ao navegar entre telas
+[ ] 12. Configurações persistem ao recarregar a página
+[ ] 13. Botão "Restaurar Padrões" funcional em cada tela de configurações de foto
+[ ] 14. Sliders funcionam para N candidatos (1º turno com múltiplos candidatos)
+[ ] 15. Mapa colorido funciona para N candidatos
+[ ] 16. Analytics funcionam para N candidatos
+[ ] 17. NationalPhotoCard suporta layout para N candidatos (até 5)
+[ ] 18. vicePhoto adicionado para todos os vices dos cenários existentes de 2º turno
+[ ] 19. Exportação JSON inclui campo round e nome de arquivo com turno
+[ ] 20. Build sem erros de TypeScript (npx tsc --noEmit deve passar)
+
+=======================================================================
+NOTAS TÉCNICAS IMPORTANTES
+=======================================================================
+
+• O projeto usa React + TypeScript + Vite + Tailwind CSS + Framer Motion + D3-geo + html2canvas
+• Não altere package.json nem vite.config.ts
+• Não remova nenhuma funcionalidade existente — apenas adicione e corrija
+• Ao usar localStorage, sempre envolva em try/catch para evitar erros em ambientes restritivos
+• As URLs de fotos são externas; html2canvas pode ter problemas de CORS — o fallback de
+  iniciais coloridas já deve existir; se não existir, implemente-o
+• Para os candidatos de 2026, as fotos do Wikipedia podem ter URLs longas — use-as completas
+• O campo "coalition" (coligação) já existe no tipo Candidate; preencha para todos os candidatos
+• Verifique se todos os imports necessários estão presentes após as modificações
+• Execute "npm run build" ao final para confirmar que não há erros de compilação
+
+=======================================================================
+FIM DO PROMPT
+=======================================================================

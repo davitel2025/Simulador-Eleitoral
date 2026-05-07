@@ -70,6 +70,7 @@ export interface PoliticalScenario {
   id: string;
   name: string;
   year: number;
+  round?: ElectionRound;
   description: string;
   candidates: Omit<Candidate, 'id'>[];
   results?: Record<string, Record<number, number>>;

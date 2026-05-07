@@ -18,6 +18,23 @@ import {
 } from "../photo/PhotoCards";
 import { NationalMapCenter } from "../photo/MapCenters";
 import type { Candidate, PathData, StateResult } from "../../types";
+import {
+  clearPersistedStateByPrefix,
+  usePersistedState,
+} from "../../hooks/usePersistedState";
+
+const NATIONAL_PHOTO_PREFIX = "eleitoral_nfoto_";
+
+interface NationalPhotoSettings {
+  localMapScale: number;
+  bgValue: string;
+  bgImage?: string;
+  cardShape: PhotoCardShape;
+  circleTopSize: number;
+  circleBottomSize: number;
+  portraitTopSize: number;
+  winnerBox: WinnerBoxConfig;
+}
 
 // ─── Utilitário: captura o elemento e baixa como PNG ─────────────────────────
 export async function legacyCaptureAndDownload(
@@ -94,22 +111,55 @@ export function NationalPhotoModal({
   scenarioYear?: number;
 }) {
   const captureRef = useRef<HTMLDivElement>(null);
+  const defaultSettings = useMemo<NationalPhotoSettings>(
+    () => ({
+      localMapScale: photoMapScale,
+      bgValue: "#0f172a",
+      bgImage: undefined,
+      cardShape: "circle",
+      circleTopSize: Math.round(150 * photoScale),
+      circleBottomSize: Math.round(80 * photoScale),
+      portraitTopSize: Math.round(150 * photoScale * 1.18),
+      winnerBox: DEFAULT_WINNER_BOX,
+    }),
+    [photoMapScale, photoScale]
+  );
+  const [settings, setSettings] = usePersistedState(
+    `${NATIONAL_PHOTO_PREFIX}settings`,
+    defaultSettings
+  );
+  const [resetMessage, setResetMessage] = useState("");
+  const {
+    localMapScale,
+    bgValue,
+    bgImage,
+    cardShape,
+    circleTopSize,
+    circleBottomSize,
+    portraitTopSize,
+    winnerBox,
+  } = settings;
+  const updateSettings = (updates: Partial<NationalPhotoSettings>) => {
+    setSettings((previous) => ({ ...previous, ...updates }));
+  };
+  const handleResetDefaults = () => {
+    clearPersistedStateByPrefix(NATIONAL_PHOTO_PREFIX);
+    setSettings(defaultSettings);
+    setResetMessage("Padrões restaurados");
+    window.setTimeout(() => setResetMessage(""), 2000);
+  };
 
   // ── Estados de controle ────────────────────────────────────────────────
-  const [localMapScale, setLocalMapScale] = useState(photoMapScale);
-  const [bgValue, setBgValue] = useState("#0f172a");
-  const [bgImage, setBgImage] = useState<string | undefined>(undefined);
-  const [cardShape, setCardShape] = useState<PhotoCardShape>("circle");
+  
 
   // Tamanho da bolinha (top) e da bolinha menor (bottom)
-  const [circleTopSize, setCircleTopSize] = useState(Math.round(150 * photoScale));
-  const [circleBottomSize, setCircleBottomSize] = useState(Math.round(80 * photoScale));
+  
 
   // Tamanho do retrato (top) — altura em px
-  const [portraitTopSize, setPortraitTopSize] = useState(Math.round(150 * photoScale * 1.18));
+  
 
   // Retângulo ao redor dos top 2
-  const [winnerBox, setWinnerBox] = useState<WinnerBoxConfig>(DEFAULT_WINNER_BOX);
+  
 
   // ── Ranking ────────────────────────────────────────────────────────────
   const ranked = useMemo(() => {
@@ -165,7 +215,7 @@ export function NationalPhotoModal({
             <div className="flex rounded-xl border border-white/10 bg-slate-900/80 p-1">
               <button
                 type="button"
-                onClick={() => setCardShape("circle")}
+                onClick={() => updateSettings({ cardShape: "circle" })}
                 className={`rounded-lg px-3 py-1 text-xs font-black transition-all ${
                   cardShape === "circle" ? "bg-violet-600 text-white" : "text-slate-300"
                 }`}
@@ -174,7 +224,7 @@ export function NationalPhotoModal({
               </button>
               <button
                 type="button"
-                onClick={() => setCardShape("portrait")}
+                onClick={() => updateSettings({ cardShape: "portrait" })}
                 className={`rounded-lg px-3 py-1 text-xs font-black transition-all ${
                   cardShape === "portrait" ? "bg-violet-600 text-white" : "text-slate-300"
                 }`}
@@ -187,8 +237,8 @@ export function NationalPhotoModal({
             <AvatarSizeControls
               circleSize={circleTopSize}
               portraitSize={portraitTopSize}
-              onCircleChange={setCircleTopSize}
-              onPortraitChange={setPortraitTopSize}
+              onCircleChange={(circleTopSize) => updateSettings({ circleTopSize })}
+              onPortraitChange={(portraitTopSize) => updateSettings({ portraitTopSize })}
               shape={cardShape}
             />
 
@@ -203,7 +253,7 @@ export function NationalPhotoModal({
                 max={160}
                 step={10}
                 value={circleBottomSize}
-                onChange={(e) => setCircleBottomSize(Number(e.target.value))}
+                onChange={(e) => updateSettings({ circleBottomSize: Number(e.target.value) })}
                 className="h-2 w-20 appearance-none rounded-full bg-slate-700 accent-violet-500"
               />
               <span className="text-xs font-bold text-slate-400 w-10 text-right">
@@ -212,19 +262,36 @@ export function NationalPhotoModal({
             </div>
 
             {/* Retângulo dos vencedores */}
-            <WinnerBoxControls config={winnerBox} onChange={setWinnerBox} />
+            <WinnerBoxControls
+              config={winnerBox}
+              onChange={(winnerBox) => updateSettings({ winnerBox })}
+            />
 
             {/* Background */}
             <PhotoBackgroundPicker
               value={bgValue}
-              onChange={setBgValue}
+              onChange={(bgValue) => updateSettings({ bgValue })}
               bgImage={bgImage}
-              onImageUpload={setBgImage}
-              onRemoveImage={() => setBgImage(undefined)}
+              onImageUpload={(bgImage) => updateSettings({ bgImage })}
+              onRemoveImage={() => updateSettings({ bgImage: undefined })}
             />
 
             {/* Mapa */}
-            <MapSizeSlider value={localMapScale} onChange={setLocalMapScale} />
+            <MapSizeSlider
+              value={localMapScale}
+              onChange={(localMapScale) => updateSettings({ localMapScale })}
+            />
+
+            <button
+              type="button"
+              onClick={handleResetDefaults}
+              className="rounded-xl border border-white/15 bg-slate-800/80 px-4 py-3 text-sm font-bold text-slate-200 transition-all hover:bg-slate-700"
+            >
+              Restaurar Padrões
+            </button>
+            {resetMessage && (
+              <span className="text-xs font-bold text-emerald-300">{resetMessage}</span>
+            )}
 
             {/* Salvar */}
             <button

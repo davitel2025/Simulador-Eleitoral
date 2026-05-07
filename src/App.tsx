@@ -17,7 +17,7 @@ export default function App() {
     }));
     setCandidates(candidatesWithIds);
     setLoadedScenario(scenario);
-    setElectionRound("segundo");
+    setElectionRound(scenario.round ?? "segundo");
     setSetupComplete(true);
   };
 
@@ -48,6 +48,7 @@ export default function App() {
       candidates={candidates}
       loadedScenario={loadedScenario}
       onCandidatesChange={setCandidates}
+      onRoundChange={setElectionRound}
       onRestart={() => {
         setElectionRound(null);
         setSetupComplete(false);

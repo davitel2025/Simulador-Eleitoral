@@ -18,6 +18,24 @@ import {
 } from "../photo/PhotoCards";
 import { StateMapCenter } from "../photo/MapCenters";
 import type { Candidate, StateInfo, StateResult } from "../../types";
+import {
+  clearPersistedStateByPrefix,
+  usePersistedState,
+} from "../../hooks/usePersistedState";
+
+const STATE_PHOTO_PREFIX = "eleitoral_sfoto_";
+
+interface StatePhotoSettings {
+  localMapScale: number;
+  showMunicipalityPaint: boolean;
+  bgValue: string;
+  bgImage?: string;
+  cardShape: PhotoCardShape;
+  circleTopSize: number;
+  circleBottomSize: number;
+  portraitTopSize: number;
+  winnerBox: WinnerBoxConfig;
+}
 
 export function StatePhotoModal({ stateInfo, candidates, result, photoScale, photoMapScale, onClose, scenarioYear }: {
   stateInfo: StateInfo;
@@ -29,15 +47,45 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
   scenarioYear?: number;
 }) {
   const captureRef = useRef<HTMLDivElement>(null);
-  const [localMapScale, setLocalMapScale] = useState(photoMapScale);
-  const [showMunicipalityPaint, setShowMunicipalityPaint] = useState(result?.usesMunicipalities ?? false);
-  const [bgValue, setBgValue] = useState("#0f172a");
-  const [bgImage, setBgImage] = useState<string | undefined>(undefined);
-  const [cardShape, setCardShape] = useState<PhotoCardShape>("circle");
-  const [circleTopSize, setCircleTopSize] = useState(Math.round(150 * photoScale));
-  const [circleBottomSize, setCircleBottomSize] = useState(Math.round(80 * photoScale));
-  const [portraitTopSize, setPortraitTopSize] = useState(Math.round(150 * photoScale * 1.18));
-  const [winnerBox, setWinnerBox] = useState<WinnerBoxConfig>(DEFAULT_WINNER_BOX);
+  const defaultSettings = useMemo<StatePhotoSettings>(
+    () => ({
+      localMapScale: photoMapScale,
+      showMunicipalityPaint: result?.usesMunicipalities ?? false,
+      bgValue: "#0f172a",
+      bgImage: undefined,
+      cardShape: "circle",
+      circleTopSize: Math.round(150 * photoScale),
+      circleBottomSize: Math.round(80 * photoScale),
+      portraitTopSize: Math.round(150 * photoScale * 1.18),
+      winnerBox: DEFAULT_WINNER_BOX,
+    }),
+    [photoMapScale, photoScale, result?.usesMunicipalities]
+  );
+  const [settings, setSettings] = usePersistedState(
+    `${STATE_PHOTO_PREFIX}settings`,
+    defaultSettings
+  );
+  const [resetMessage, setResetMessage] = useState("");
+  const {
+    localMapScale,
+    showMunicipalityPaint,
+    bgValue,
+    bgImage,
+    cardShape,
+    circleTopSize,
+    circleBottomSize,
+    portraitTopSize,
+    winnerBox,
+  } = settings;
+  const updateSettings = (updates: Partial<StatePhotoSettings>) => {
+    setSettings((previous) => ({ ...previous, ...updates }));
+  };
+  const handleResetDefaults = () => {
+    clearPersistedStateByPrefix(STATE_PHOTO_PREFIX);
+    setSettings(defaultSettings);
+    setResetMessage("Padrões restaurados");
+    window.setTimeout(() => setResetMessage(""), 2000);
+  };
 
   const ranked = useMemo(() => {
     const rows = candidates
@@ -86,21 +134,21 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
           <div className="flex gap-2 items-center flex-wrap">
             {/* Shape toggle */}
             <div className="flex rounded-xl border border-white/10 bg-slate-900/80 p-1">
-              <button type="button" onClick={() => setCardShape("circle")}
+              <button type="button" onClick={() => updateSettings({ cardShape: "circle" })}
                 className={`rounded-lg px-3 py-1 text-xs font-black transition-all ${cardShape === "circle" ? "bg-violet-600 text-white" : "text-slate-300"}`}>
                 ⚪ Bola
               </button>
-              <button type="button" onClick={() => setCardShape("portrait")}
+              <button type="button" onClick={() => updateSettings({ cardShape: "portrait" })}
                 className={`rounded-lg px-3 py-1 text-xs font-black transition-all ${cardShape === "portrait" ? "bg-violet-600 text-white" : "text-slate-300"}`}>
                 🟦 Retrato
               </button>
             </div>
             <div className="flex rounded-xl border border-white/10 bg-slate-900/80 p-1">
-              <button type="button" onClick={() => setShowMunicipalityPaint(false)}
+              <button type="button" onClick={() => updateSettings({ showMunicipalityPaint: false })}
                 className={`rounded-lg px-3 py-1 text-xs font-black ${showMunicipalityPaint ? "text-slate-300" : "bg-violet-600 text-white"}`}>
                 Sem município
               </button>
-              <button type="button" onClick={() => setShowMunicipalityPaint(true)}
+              <button type="button" onClick={() => updateSettings({ showMunicipalityPaint: true })}
                 className={`rounded-lg px-3 py-1 text-xs font-black ${showMunicipalityPaint ? "bg-violet-600 text-white" : "text-slate-300"}`}>
                 Com município
               </button>
@@ -108,8 +156,8 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
             <AvatarSizeControls
               circleSize={circleTopSize}
               portraitSize={portraitTopSize}
-              onCircleChange={setCircleTopSize}
-              onPortraitChange={setPortraitTopSize}
+              onCircleChange={(circleTopSize) => updateSettings({ circleTopSize })}
+              onPortraitChange={(portraitTopSize) => updateSettings({ portraitTopSize })}
               shape={cardShape}
             />
             <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2">
@@ -122,22 +170,38 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
                 max={160}
                 step={10}
                 value={circleBottomSize}
-                onChange={(e) => setCircleBottomSize(Number(e.target.value))}
+                onChange={(e) => updateSettings({ circleBottomSize: Number(e.target.value) })}
                 className="h-2 w-20 appearance-none rounded-full bg-slate-700 accent-violet-500"
               />
               <span className="text-xs font-bold text-slate-400 w-10 text-right">
                 {circleBottomSize}px
               </span>
             </div>
-            <WinnerBoxControls config={winnerBox} onChange={setWinnerBox} />
+            <WinnerBoxControls
+              config={winnerBox}
+              onChange={(winnerBox) => updateSettings({ winnerBox })}
+            />
             <PhotoBackgroundPicker
               value={bgValue}
-              onChange={setBgValue}
+              onChange={(bgValue) => updateSettings({ bgValue })}
               bgImage={bgImage}
-              onImageUpload={setBgImage}
-              onRemoveImage={() => setBgImage(undefined)}
+              onImageUpload={(bgImage) => updateSettings({ bgImage })}
+              onRemoveImage={() => updateSettings({ bgImage: undefined })}
             />
-            <MapSizeSlider value={localMapScale} onChange={setLocalMapScale} />
+            <MapSizeSlider
+              value={localMapScale}
+              onChange={(localMapScale) => updateSettings({ localMapScale })}
+            />
+            <button
+              type="button"
+              onClick={handleResetDefaults}
+              className="rounded-xl border border-white/15 bg-slate-800/80 px-4 py-2 text-sm font-bold text-white"
+            >
+              Restaurar Padrões
+            </button>
+            {resetMessage && (
+              <span className="text-xs font-bold text-emerald-300">{resetMessage}</span>
+            )}
             <button type="button" onClick={handleDownload} className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-black text-zinc-950">Salvar PNG</button>
             <button type="button" onClick={onClose} className="rounded-xl border border-white/15 px-4 py-2 text-sm font-bold text-white">Fechar</button>
           </div>

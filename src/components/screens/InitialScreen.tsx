@@ -9,6 +9,74 @@ type InitialView = "home" | "scenarios" | "custom";
 // Total padrão do eleitorado nacional (projeção 2026)
 const DEFAULT_NATIONAL_VOTERS = STATES.reduce((sum, s) => sum + s.voters, 0);
 
+function getScenarioRound(scenario: PoliticalScenario): ElectionRound {
+  return scenario.round ?? "segundo";
+}
+
+function getScenarioGroupTitle(scenario: PoliticalScenario): string {
+  return scenario.year === 2026 ? "Projeção 2026" : `Eleições ${scenario.year}`;
+}
+
+function getScenarioBadge(scenario: PoliticalScenario) {
+  if (scenario.id.includes("simulado")) {
+    return {
+      label: getScenarioRound(scenario) === "primeiro" ? "1º Turno — Simulação" : "Simulação",
+      className: "border-purple-500/30 bg-purple-500/20 text-purple-300",
+    };
+  }
+  if (getScenarioRound(scenario) === "primeiro") {
+    return {
+      label: "1º Turno",
+      className: "border-blue-500/30 bg-blue-500/20 text-blue-300",
+    };
+  }
+  return {
+    label: "2º Turno",
+    className: "border-amber-500/30 bg-amber-500/20 text-amber-300",
+  };
+}
+
+function CandidateThumb({
+  candidate,
+}: {
+  candidate: PoliticalScenario["candidates"][number];
+}) {
+  const [hasImageError, setHasImageError] = useState(false);
+  const initials = candidate.name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+
+  return (
+    <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-950/50 px-2.5 py-2">
+      <div
+        className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border text-[10px] font-black text-white"
+        style={{ borderColor: candidate.color, backgroundColor: `${candidate.color}33` }}
+      >
+        {candidate.photo && !hasImageError ? (
+          <img
+            src={candidate.photo}
+            alt={candidate.name}
+            className="h-full w-full object-cover"
+            onError={() => setHasImageError(true)}
+          />
+        ) : (
+          initials || candidate.number
+        )}
+      </div>
+      <div className="min-w-0">
+        <div className="truncate text-xs font-black text-slate-200">{candidate.name}</div>
+        <div className="text-[10px] font-bold text-slate-500">
+          {candidate.party} · {candidate.number}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CustomScenarioBuilder({
   onBack,
   onSelectScenario,
@@ -323,6 +391,14 @@ export function InitialScreen({
   onSelectScenario: (scenario: PoliticalScenario) => void;
 }) {
   const [view, setView] = useState<InitialView>("home");
+  const groupedScenarios = POLITICAL_SCENARIOS.reduce<Record<string, PoliticalScenario[]>>(
+    (groups, scenario) => {
+      const title = getScenarioGroupTitle(scenario);
+      groups[title] = [...(groups[title] ?? []), scenario];
+      return groups;
+    },
+    {}
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-zinc-950 flex items-center justify-center p-4">
@@ -435,39 +511,57 @@ export function InitialScreen({
               Voltar
             </button>
 
-            {POLITICAL_SCENARIOS.map((scenario) => (
-              <motion.button
-                key={scenario.id}
-                type="button"
-                onClick={() => onSelectScenario(scenario)}
-                whileHover={{ scale: 1.01 }}
-                className="w-full rounded-2xl border border-white/10 bg-slate-900/50 p-6 text-left transition-all hover:bg-slate-800 hover:border-white/20"
+            {Object.entries(groupedScenarios).map(([groupTitle, scenarios]) => {
+              const orderedScenarios = [...scenarios].sort((a, b) => {
+                if (getScenarioRound(a) === getScenarioRound(b)) return 0;
+                return getScenarioRound(a) === "primeiro" ? -1 : 1;
+              });
+              return (
+              <section
+                key={groupTitle}
+                className="rounded-3xl border border-white/10 bg-slate-950/40 p-4"
               >
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <div className="text-2xl font-black text-white mb-1">{scenario.name}</div>
-                    <p className="text-sm text-slate-400">{scenario.description}</p>
-                  </div>
-                  <div className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-black text-emerald-400">
-                    {scenario.year}
-                  </div>
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="text-xl font-black text-white">{groupTitle}</h2>
+                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-black text-slate-400">
+                    {scenarios.length} cenário{scenarios.length > 1 ? "s" : ""}
+                  </span>
                 </div>
-                <div className="flex gap-2 flex-wrap">
-                  {scenario.candidates.map((cand, i) => (
-                    <div
-                      key={i}
-                      className="rounded-lg px-3 py-1.5 text-xs font-bold"
-                      style={{ backgroundColor: `${cand.color}20`, color: cand.color }}
-                    >
-                      {cand.name} - {cand.party}
-                      {cand.ideology && (
-                        <span className="ml-1 opacity-70">({cand.ideology})</span>
-                      )}
-                    </div>
-                  ))}
+
+                <div className="grid gap-3">
+                  {orderedScenarios.map((scenario) => {
+                    const badge = getScenarioBadge(scenario);
+                    return (
+                      <motion.button
+                        key={scenario.id}
+                        type="button"
+                        onClick={() => onSelectScenario(scenario)}
+                        whileHover={{ scale: 1.01 }}
+                        className="w-full rounded-2xl border border-white/10 bg-slate-900/60 p-5 text-left transition-all hover:bg-slate-800 hover:border-white/20"
+                      >
+                        <div className="mb-4 flex items-start justify-between gap-4">
+                          <div>
+                            <div className="mb-1 text-2xl font-black text-white">
+                              {scenario.name}
+                            </div>
+                            <p className="text-sm text-slate-400">{scenario.description}</p>
+                          </div>
+                          <div className={`rounded-full border px-3 py-1 text-xs font-black ${badge.className}`}>
+                            {badge.label}
+                          </div>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {scenario.candidates.map((candidate, index) => (
+                            <CandidateThumb key={`${scenario.id}-${index}`} candidate={candidate} />
+                          ))}
+                        </div>
+                      </motion.button>
+                    );
+                  })}
                 </div>
-              </motion.button>
-            ))}
+              </section>
+              );
+            })}
           </div>
         )}
 

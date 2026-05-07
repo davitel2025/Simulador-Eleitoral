@@ -1,5 +1,5 @@
-import type { CSSProperties } from "react";
-import type { RankedItem } from "../../types";
+import { useState, type CSSProperties } from "react";
+import type { Candidate, RankedItem } from "../../types";
 import { formatPct } from "../../lib/utils";
 import { UserIcon } from "../UserIcon";
 
@@ -23,6 +23,48 @@ export const DEFAULT_WINNER_BOX: WinnerBoxConfig = {
   padding: 24,
   borderWidth: 4,
 };
+
+function getCandidateInitials(candidate: Candidate): string {
+  return (
+    candidate.name
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase() || candidate.number
+  );
+}
+
+function CandidateImage({
+  candidate,
+  className,
+  fallbackClassName = "text-3xl",
+}: {
+  candidate: Candidate;
+  className: string;
+  fallbackClassName?: string;
+}) {
+  const [hasImageError, setHasImageError] = useState(false);
+  if (!candidate.photo || hasImageError) {
+    return (
+      <div
+        className={`flex h-full w-full items-center justify-center font-black ${fallbackClassName}`}
+        style={{ color: candidate.color }}
+      >
+        {getCandidateInitials(candidate)}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={candidate.photo}
+      alt={candidate.name}
+      className={className}
+      onError={() => setHasImageError(true)}
+    />
+  );
+}
 
 export function getPhotoBackgroundStyle(
   bgValue: string,
@@ -156,32 +198,14 @@ export function TopCandidateCard({
             borderRadius: "16px",
           }}
         >
-          {candidate.photo ? (
-            <img src={candidate.photo} alt={candidate.name} className="h-full w-full object-cover" />
-          ) : (
-            <div
-              className="flex h-full w-full items-center justify-center text-3xl font-black"
-              style={{ color: candidate.color }}
-            >
-              {candidate.number}
-            </div>
-          )}
+          <CandidateImage candidate={candidate} className="h-full w-full object-cover" />
         </div>
       ) : (
         <div
           className="mb-3 overflow-hidden rounded-full border-4 bg-slate-900 flex-shrink-0"
           style={{ width: avatarPx, height: avatarPx, borderColor: candidate.color }}
         >
-          {candidate.photo ? (
-            <img src={candidate.photo} alt={candidate.name} className="h-full w-full object-cover" />
-          ) : (
-            <div
-              className="flex h-full w-full items-center justify-center text-3xl font-black"
-              style={{ color: candidate.color }}
-            >
-              {candidate.number}
-            </div>
-          )}
+          <CandidateImage candidate={candidate} className="h-full w-full object-cover" />
         </div>
       )}
 
@@ -256,16 +280,11 @@ export function BottomCandidateCard({
         className="mb-2 overflow-hidden rounded-full border-2 bg-slate-900"
         style={{ width: avatarPx, height: avatarPx, borderColor: candidate.color }}
       >
-        {candidate.photo ? (
-          <img src={candidate.photo} alt={candidate.name} className="h-full w-full object-cover" />
-        ) : (
-          <div
-            className="flex h-full w-full items-center justify-center text-sm font-black"
-            style={{ color: candidate.color }}
-          >
-            {candidate.number}
-          </div>
-        )}
+        <CandidateImage
+          candidate={candidate}
+          className="h-full w-full object-cover"
+          fallbackClassName="text-sm"
+        />
       </div>
 
       <div className="text-lg font-black mb-0.5" style={{ color: candidate.color }}>

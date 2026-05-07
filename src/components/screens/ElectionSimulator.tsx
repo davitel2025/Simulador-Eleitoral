@@ -27,8 +27,11 @@ import { MunicipalityPaintModal } from "../modals/MunicipalityPaintModal";
 import { StatePhotoModal } from "../modals/StatePhotoModal";
 import { NationalPhotoModal } from "../modals/NationalPhotoModal";
 import { RegionalPhotoModal } from "../modals/RegionalPhotoModal";
+import { usePersistedState } from "../../hooks/usePersistedState";
 
 type AnalyticsTab = "regioes" | "desempenho" | "ranking" | "candidatos";
+const DEFAULT_PHOTO_SCALE = 1.45;
+const DEFAULT_PHOTO_MAP_SCALE = 520;
 
 // ─── Helper: votos de um estado conforme cenário ──────────────────────────────
 // Se o cenário tem nationalVoters + customStates, os voters já foram distribuídos
@@ -61,12 +64,14 @@ export function ElectionSimulator({
   round,
   candidates,
   onCandidatesChange,
+  onRoundChange,
   onRestart,
   loadedScenario,
 }: {
   round: ElectionRound;
   candidates: Candidate[];
   onCandidatesChange: (candidates: Candidate[]) => void;
+  onRoundChange: (round: ElectionRound) => void;
   onRestart: () => void;
   loadedScenario?: PoliticalScenario | null;
 }) {
@@ -85,8 +90,14 @@ export function ElectionSimulator({
   const [analyticsTab, setAnalyticsTab] = useState<AnalyticsTab>("regioes");
   const [regionFocus, setRegionFocus] = useState<RegionName | null>(null);
   const [neonStates, setNeonStates] = useState(true);
-  const [nationalPhotoScale, setNationalPhotoScale] = useState(1.45);
-  const [photoMapScale, setPhotoMapScale] = useState(520);
+  const [nationalPhotoScale, setNationalPhotoScale] = usePersistedState(
+    "eleitoral_nfoto_photoScale",
+    DEFAULT_PHOTO_SCALE
+  );
+  const [photoMapScale, setPhotoMapScale] = usePersistedState(
+    "eleitoral_nfoto_mapScale",
+    DEFAULT_PHOTO_MAP_SCALE
+  );
 
   const importRef = useRef<HTMLInputElement>(null);
   const [mapZoom, setMapZoom] = useState(1);
@@ -282,6 +293,8 @@ export function ElectionSimulator({
   };
 
   const handleExport = () => {
+    const roundSlug = round === "primeiro" ? "1turno" : "2turno";
+    const yearSlug = scenarioYear ?? new Date().getFullYear();
     const payload = {
       round,
       candidates,
@@ -294,7 +307,7 @@ export function ElectionSimulator({
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `simulador-${round}-turno-${Date.now()}.json`;
+    anchor.download = `cenario_${yearSlug}_${roundSlug}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
   };
@@ -310,15 +323,19 @@ export function ElectionSimulator({
         if (payload.candidates && Array.isArray(payload.candidates)) {
           onCandidatesChange(payload.candidates);
         }
+        if (payload.round === "primeiro" || payload.round === "segundo") {
+          onRoundChange(payload.round);
+        }
         if (payload.results && typeof payload.results === "object") {
           const normalized: Record<string, StateResult> = {};
           for (const [uf, result] of Object.entries(
             payload.results as Record<string, any>
           )) {
+            const votes = result.votes ?? {};
             normalized[uf] = {
               uf,
-              votes: result.votes ?? {},
-              winner: result.winner ?? null,
+              votes,
+              winner: result.winner ?? getWinner(votes),
               municipalities: result.municipalities ?? {},
               municipalityPaint: result.municipalityPaint ?? {},
               usesMunicipalities:
@@ -421,6 +438,11 @@ export function ElectionSimulator({
 
   const scenarioYear = loadedScenario?.year;
   const totalActiveStates = activeStates.length;
+  const roundBadgeClass =
+    round === "primeiro"
+      ? "border-blue-500/30 bg-blue-500/20 text-blue-300"
+      : "border-amber-500/30 bg-amber-500/20 text-amber-300";
+  const roundLabel = round === "primeiro" ? "1º Turno" : "2º Turno";
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-zinc-950 text-slate-100">
@@ -452,9 +474,14 @@ export function ElectionSimulator({
                   </span>
                 )}
               </p>
-              <h1 className="text-2xl font-black tracking-tight text-white">
-                Brasil {scenarioYear ?? 2026}
-              </h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-black tracking-tight text-white">
+                  {loadedScenario?.name ?? `Brasil ${scenarioYear ?? 2026}`}
+                </h1>
+                <span className={`rounded-full border px-3 py-1 text-xs font-black ${roundBadgeClass}`}>
+                  {roundLabel}
+                </span>
+              </div>
             </div>
           </div>
 

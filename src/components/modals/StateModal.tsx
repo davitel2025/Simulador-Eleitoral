@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { VIEWBOX_HEIGHT, VIEWBOX_WIDTH } from "../../lib/constants";
 import { getColorByWinnerPct, shadeHex } from "../../lib/color";
 import { buildMunicipalityPaths, fetchMunicipalityGeo } from "../../lib/geo";
-import { formatPct, getWinner } from "../../lib/utils";
+import { formatPct, getWinner, normalizeVotesForCandidates } from "../../lib/utils";
 import type { Candidate, CandidateId, MunicipalityPath, StateInfo, StateResult } from "../../types";
 
 function StateSilhouetteMap({
@@ -69,7 +69,8 @@ export function StateModal({ stateInfo, initialResult, candidates, onClose, onSa
   onSave: (result: StateResult) => void;
 }) {
   const [votes, setVotes] = useState<Record<CandidateId, number>>(() => {
-    if (initialResult) return initialResult.votes;
+    const candidateIds = candidates.map((candidate) => candidate.id);
+    if (initialResult) return normalizeVotesForCandidates(initialResult.votes, candidateIds);
     const initialVotes: Record<CandidateId, number> = {};
     const equalShare = 100 / candidates.length;
     candidates.forEach((c) => { initialVotes[c.id] = equalShare; });
@@ -77,10 +78,22 @@ export function StateModal({ stateInfo, initialResult, candidates, onClose, onSa
   });
 
   const handleSliderChange = (candidateId: CandidateId, value: number) => {
-    const newVotes = { ...votes, [candidateId]: value };
-    const total = Object.values(newVotes).reduce((sum, v) => sum + v, 0);
-    const scale = 100 / total;
-    Object.keys(newVotes).forEach((id) => { newVotes[Number(id)] = newVotes[Number(id)] * scale; });
+    const clampedValue = Math.min(100, Math.max(0, value));
+    const otherCandidates = candidates.filter((candidate) => candidate.id !== candidateId);
+    const otherCurrentTotal = otherCandidates.reduce(
+      (sum, candidate) => sum + (votes[candidate.id] || 0),
+      0
+    );
+    const remaining = 100 - clampedValue;
+    const newVotes: Record<CandidateId, number> = { ...votes, [candidateId]: clampedValue };
+
+    otherCandidates.forEach((candidate) => {
+      newVotes[candidate.id] =
+        otherCurrentTotal > 0
+          ? ((votes[candidate.id] || 0) / otherCurrentTotal) * remaining
+          : remaining / Math.max(otherCandidates.length, 1);
+    });
+
     setVotes(newVotes);
   };
 
