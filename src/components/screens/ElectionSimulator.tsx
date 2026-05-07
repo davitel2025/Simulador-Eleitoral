@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type MouseEvent as ReactMouseEvent,
+  type TouchEvent as ReactTouchEvent,
+} from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { REGIONS, STATES, STATE_BY_UF } from "../../data/states";
 import { STATE_GEO_URL, VIEWBOX_HEIGHT, VIEWBOX_WIDTH } from "../../lib/constants";
@@ -103,6 +111,9 @@ export function ElectionSimulator({
   const [mapZoom, setMapZoom] = useState(1);
   const [mapOffset, setMapOffset] = useState({ x: 0, y: 0 });
   const mapContainerRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
+  const lastMousePosRef = useRef({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
 
   const activeStates = useMemo(
     () => getActiveStates(loadedScenario),
@@ -161,8 +172,22 @@ export function ElectionSimulator({
     if (!mapNode) return;
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
-      const delta = event.deltaY > 0 ? -0.12 : 0.12;
-      setMapZoom((prev) => clamp(Number((prev + delta).toFixed(2)), 0.5, 5));
+      const rect = mapNode.getBoundingClientRect();
+      const mouseX = event.clientX - rect.left;
+      const mouseY = event.clientY - rect.top;
+      const zoomFactor = event.deltaY > 0 ? -0.12 : 0.12;
+
+      setMapZoom((prevZoom) => {
+        const newZoom = clamp(Number((prevZoom + zoomFactor).toFixed(2)), 0.5, 5);
+        const scale = newZoom / prevZoom;
+
+        setMapOffset((prevOffset) => ({
+          x: mouseX - scale * (mouseX - prevOffset.x),
+          y: mouseY - scale * (mouseY - prevOffset.y),
+        }));
+
+        return newZoom;
+      });
     };
     mapNode.addEventListener("wheel", onWheel, { passive: false });
     return () => mapNode.removeEventListener("wheel", onWheel);
@@ -444,6 +469,48 @@ export function ElectionSimulator({
       : "border-amber-500/30 bg-amber-500/20 text-amber-300";
   const roundLabel = round === "primeiro" ? "1º Turno" : "2º Turno";
 
+  const stopMapDrag = () => {
+    isDraggingRef.current = false;
+    setIsDragging(false);
+  };
+
+  const shouldIgnoreMapDrag = (target: EventTarget | null) =>
+    target instanceof HTMLElement &&
+    Boolean(target.closest("button, input, select, textarea, a"));
+
+  const handleMapMouseDown = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (shouldIgnoreMapDrag(event.target)) return;
+    isDraggingRef.current = true;
+    setIsDragging(true);
+    lastMousePosRef.current = { x: event.clientX, y: event.clientY };
+    event.preventDefault();
+  };
+
+  const handleMapMouseMove = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current) return;
+    const dx = event.clientX - lastMousePosRef.current.x;
+    const dy = event.clientY - lastMousePosRef.current.y;
+    lastMousePosRef.current = { x: event.clientX, y: event.clientY };
+    setMapOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+  };
+
+  const handleMapTouchStart = (event: ReactTouchEvent<HTMLDivElement>) => {
+    if (shouldIgnoreMapDrag(event.target) || event.touches.length === 0) return;
+    const touch = event.touches[0];
+    isDraggingRef.current = true;
+    setIsDragging(true);
+    lastMousePosRef.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const handleMapTouchMove = (event: ReactTouchEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current || event.touches.length === 0) return;
+    const touch = event.touches[0];
+    const dx = touch.clientX - lastMousePosRef.current.x;
+    const dy = touch.clientY - lastMousePosRef.current.y;
+    lastMousePosRef.current = { x: touch.clientX, y: touch.clientY };
+    setMapOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-zinc-950 text-slate-100">
       {/* ── Header ──────────────────────────────────────────────────────── */}
@@ -663,7 +730,16 @@ export function ElectionSimulator({
           {/* Map */}
           <div
             ref={mapContainerRef}
-            className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950 to-slate-900 shadow-2xl touch-none cursor-grab active:cursor-grabbing overscroll-contain"
+            className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950 to-slate-900 shadow-2xl touch-none overscroll-contain"
+            style={{ cursor: isDragging ? "grabbing" : "grab" }}
+            onMouseDown={handleMapMouseDown}
+            onMouseMove={handleMapMouseMove}
+            onMouseUp={stopMapDrag}
+            onMouseLeave={stopMapDrag}
+            onTouchStart={handleMapTouchStart}
+            onTouchMove={handleMapTouchMove}
+            onTouchEnd={stopMapDrag}
+            onTouchCancel={stopMapDrag}
           >
             <div className="absolute right-4 bottom-4 z-20 flex flex-col gap-2">
               <div className="flex items-center gap-1 rounded-xl border border-white/15 bg-black/60 p-1 backdrop-blur-md shadow-2xl">
@@ -749,16 +825,7 @@ export function ElectionSimulator({
               <div className="h-[70vh] w-full overflow-hidden">
                 <motion.div
                   className="w-full h-full origin-center"
-                  drag
-                  dragConstraints={mapContainerRef}
-                  dragElastic={0.1}
                   style={{ x: mapOffset.x, y: mapOffset.y, scale: mapZoom }}
-                  onDragEnd={(_event: unknown, info: { offset: { x: number; y: number } }) => {
-                    setMapOffset((prev) => ({
-                      x: prev.x + info.offset.x,
-                      y: prev.y + info.offset.y,
-                    }));
-                  }}
                 >
                   <svg
                     viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}

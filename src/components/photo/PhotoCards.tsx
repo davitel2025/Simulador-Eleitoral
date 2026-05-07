@@ -61,6 +61,8 @@ function CandidateImage({
       src={candidate.photo}
       alt={candidate.name}
       className={className}
+      crossOrigin="anonymous"
+      referrerPolicy="no-referrer"
       onError={() => setHasImageError(true)}
     />
   );
@@ -91,11 +93,67 @@ export function getFrameSurfaceColor(bgValue: string, bgImage?: string): string 
   return bgImage || bgValue.startsWith("linear-gradient") ? "transparent" : bgValue;
 }
 
-export async function captureAndDownload(
+async function preloadImagesAsBase64(root: HTMLElement): Promise<() => void> {
+  const imgs = Array.from(root.querySelectorAll<HTMLImageElement>("img"));
+  const restoreFns: Array<() => void> = [];
+
+  await Promise.allSettled(
+    imgs.map(async (img) => {
+      const src = img.src;
+      if (!src || src.startsWith("data:")) return;
+
+      try {
+        const base64 = await fetchImageAsBase64(src);
+        restoreFns.push(() => {
+          img.src = src;
+        });
+        img.src = base64;
+      } catch {
+        // Mantem a imagem original se a conversao falhar.
+      }
+    })
+  );
+
+  return () => restoreFns.forEach((restore) => restore());
+}
+
+async function fetchImageAsBase64(url: string): Promise<string> {
+  try {
+    const response = await fetch(url, { mode: "cors" });
+    if (response.ok) {
+      return await blobToBase64(await response.blob());
+    }
+  } catch {
+    // Tenta proxy publico abaixo.
+  }
+
+  try {
+    const proxiedUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+    const response = await fetch(proxiedUrl);
+    if (response.ok) {
+      return await blobToBase64(await response.blob());
+    }
+  } catch {
+    // Reporta erro unico ao chamador.
+  }
+
+  throw new Error(`Nao foi possivel carregar a imagem: ${url}`);
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function downloadCanvasAsPng(
   element: HTMLElement,
   filename: string,
   backgroundColor: string
-): Promise<void> {
+): Promise<boolean> {
   try {
     const html2canvas = (await import("html2canvas")).default;
     const canvas = await html2canvas(element, {
@@ -109,13 +167,27 @@ export async function captureAndDownload(
       scrollY: -window.scrollY,
       windowWidth: document.documentElement.scrollWidth,
       windowHeight: document.documentElement.scrollHeight,
+      onclone: (clonedDoc) => {
+        clonedDoc.querySelectorAll("*").forEach((el) => {
+          const htmlEl = el as HTMLElement;
+          htmlEl.style.colorScheme = "";
+          const computedStyle = window.getComputedStyle(htmlEl);
+          const color = computedStyle.color;
+          const bg = computedStyle.backgroundColor;
+          if (color.includes("oklab") || color.includes("oklch")) {
+            htmlEl.style.color = "#ffffff";
+          }
+          if (bg.includes("oklab") || bg.includes("oklch")) {
+            htmlEl.style.backgroundColor = backgroundColor;
+          }
+        });
+      },
     });
 
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
-    if (!blob) {
-      alert("Erro ao gerar imagem. Tente novamente.");
-      return;
-    }
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/png")
+    );
+    if (!blob) return false;
 
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -125,9 +197,50 @@ export async function captureAndDownload(
     anchor.click();
     document.body.removeChild(anchor);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return true;
+  } catch (fallbackError) {
+    console.error("Fallback html2canvas tambem falhou:", fallbackError);
+    return false;
+  }
+}
+
+export async function captureAndDownload(
+  element: HTMLElement,
+  filename: string,
+  backgroundColor: string
+): Promise<void> {
+  let restoreImages: (() => void) | null = null;
+
+  try {
+    const { toPng } = await import("html-to-image");
+    restoreImages = await preloadImagesAsBase64(element);
+
+    const dataUrl = await toPng(element, {
+      backgroundColor,
+      pixelRatio: Math.max(2, window.devicePixelRatio || 1),
+      cacheBust: true,
+      includeQueryParams: true,
+      skipFonts: false,
+      filter: () => true,
+    });
+
+    const link = document.createElement("a");
+    link.download = filename;
+    link.href = dataUrl;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   } catch (error) {
     console.error("Erro ao gerar PNG:", error);
-    alert("Erro ao salvar imagem. Verifique o console para detalhes.");
+    const fallbackSucceeded = await downloadCanvasAsPng(element, filename, backgroundColor);
+    if (!fallbackSucceeded) {
+      alert(
+        "Erro ao salvar imagem. Verifique o console para detalhes.\n\n" +
+          "Dica: se o erro persistir, tente remover as fotos externas dos candidatos e usar apenas fotos enviadas por upload."
+      );
+    }
+  } finally {
+    restoreImages?.();
   }
 }
 
@@ -184,7 +297,13 @@ export function TopCandidateCard({
     >
       {candidate.partyLogo && (
         <div className="mb-3 h-10 w-auto flex items-center justify-center">
-          <img src={candidate.partyLogo} alt={candidate.party} className="h-10 object-contain" />
+          <img
+            src={candidate.partyLogo}
+            alt={candidate.party}
+            className="h-10 object-contain"
+            crossOrigin="anonymous"
+            referrerPolicy="no-referrer"
+          />
         </div>
       )}
 
@@ -219,7 +338,13 @@ export function TopCandidateCard({
               className="h-8 w-8 overflow-hidden rounded-full border-2"
               style={{ borderColor: candidate.color }}
             >
-              <img src={candidate.vicePhoto} alt={candidate.vice} className="h-full w-full object-cover" />
+              <img
+                src={candidate.vicePhoto}
+                alt={candidate.vice}
+                className="h-full w-full object-cover"
+                crossOrigin="anonymous"
+                referrerPolicy="no-referrer"
+              />
             </div>
           )}
           <div className="text-xs font-semibold text-slate-400">Vice: {candidate.vice}</div>
@@ -271,7 +396,13 @@ export function BottomCandidateCard({
     >
       {candidate.partyLogo && (
         <div className="mb-2 h-7 flex items-center justify-center">
-          <img src={candidate.partyLogo} alt={candidate.party} className="h-7 object-contain" />
+          <img
+            src={candidate.partyLogo}
+            alt={candidate.party}
+            className="h-7 object-contain"
+            crossOrigin="anonymous"
+            referrerPolicy="no-referrer"
+          />
         </div>
       )}
 

@@ -77,4 +77,5 @@ export interface PoliticalScenario {
   customStates?: CustomStateInfo[]; // para cenários personalizados
   nationalVoters?: number; // eleitorado nacional total (distribui proporcionalmente por estado)
   isCustom?: boolean;
+  generatedAt?: string;
 }

@@ -1,0 +1,8 @@
+[31m(!) Failed to run dependency scan. Skipping dependency pre-bundling. Error: The following dependencies are imported but could not be resolved:
+
+  [36m@emotion/is-prop-valid[31m [37m[2m(imported by C:/Users/usuario/Downloads/Estudos/VScode/update-map-and-view-features/docs/index.html?id=0)[22m[31m
+
+Are they installed?
+    at file:///C:/Users/usuario/Downloads/Estudos/VScode/update-map-and-view-features/node_modules/vite/dist/node/chunks/config.js:32551:33
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async file:///C:/Users/usuario/Downloads/Estudos/VScode/update-map-and-view-features/node_modules/vite/dist/node/chunks/config.js:34759:15[39m

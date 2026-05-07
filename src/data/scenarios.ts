@@ -1,4 +1,39 @@
 import type { PoliticalScenario } from "../types";
+import primeirTurno2026 from "../data_cenarios/primeiro_turno_2026.json";
+import segundoTurno2026 from "../data_cenarios/segundo_turno_2026.json";
+
+type ScenarioResultsInput = Record<string, Record<number, number> | { votes: Record<number, number> }>;
+
+function normalizeScenarioResults(
+  results: ScenarioResultsInput
+): Record<string, Record<number, number>> {
+  return Object.fromEntries(
+    Object.entries(results).map(([uf, result]) => [
+      uf,
+      "votes" in result ? result.votes : result,
+    ])
+  );
+}
+
+const primeiroTurno2026Scenario = {
+  id: "2026_1t",
+  name: "Projecao 2026 - 1o Turno",
+  year: 2026,
+  description: "Cenario de 1o turno de 2026 importado de JSON.",
+  ...primeirTurno2026,
+  round: "primeiro",
+  results: normalizeScenarioResults(primeirTurno2026.results),
+} as unknown as PoliticalScenario;
+
+const segundoTurno2026Scenario = {
+  id: "2026_2t",
+  name: "Projecao 2026 - 2o Turno",
+  year: 2026,
+  description: "Cenario de 2o turno de 2026 importado de JSON.",
+  ...segundoTurno2026,
+  round: "segundo",
+  results: normalizeScenarioResults(segundoTurno2026.results),
+} as unknown as PoliticalScenario;
 
 // Dados oficiais TSE — 2º turno
 // 2018: Bolsonaro × Haddad — 104.820.213 votos válidos nacionais
@@ -233,71 +268,6 @@ export const POLITICAL_SCENARIOS: PoliticalScenario[] = [
     },
   },
 
-  {
-    id: "2026_1t_simulado",
-    name: "Projeção 2026 — 1º Turno",
-    year: 2026,
-    round: "primeiro",
-    description: "Simulação baseada nas pesquisas Quaest/Real Time Big Data (mai/2026): Lula ~38%, Flávio ~33%, Caiado ~6%, Zema ~3%",
-    candidates: [
-      { name: "Luiz Inácio Lula da Silva", vice: "A definir", party: "PT", number: "13", color: "#dc2626", ideology: "Esquerda", photo: "https://s2-valor.glbimg.com/hrCeXhkq6K3qhOcxCsmmNsXftjQ=/0x0:2775x1850/924x0/smart/filters:strip_icc()/i.s3.glbimg.com/v1/AUTH_63b422c2caee4269b8b34177e8876b93/internal_photos/bs/2022/R/N/KYBjTgRyO1r8ibD8RmUA/c158e26e504b4ba88530ec867cb099f5-9624a.jpg", coalition: "PT e aliados (a definir)" },
-      { name: "Flávio Bolsonaro", vice: "A definir", party: "PL", number: "22", color: "#1e40af", ideology: "Direita", photo: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/27/Fl%C3%A1vio_Bolsonaro_Oficial.jpg/440px-Fl%C3%A1vio_Bolsonaro_Oficial.jpg", coalition: "PL e aliados (a definir)" },
-      { name: "Ronaldo Caiado", vice: "A definir", party: "PSD", number: "55", color: "#16a34a", ideology: "Centro-Direita", photo: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Ronaldo_Caiado_2023.jpg/440px-Ronaldo_Caiado_2023.jpg", coalition: "PSD e aliados (a definir)" },
-      { name: "Romeu Zema", vice: "A definir", party: "NOVO", number: "30", color: "#f59e0b", ideology: "Direita Liberal", photo: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d1/Romeu_Zema_foto_oficial.jpg/440px-Romeu_Zema_foto_oficial.jpg", coalition: "NOVO" },
-    ],
-    results: {
-      "AC": { 1: 28.0, 2: 54.0, 3: 9.0, 4: 5.0 },
-      "AL": { 1: 54.0, 2: 32.0, 3: 7.0, 4: 3.0 },
-      "AP": { 1: 36.0, 2: 48.0, 3: 7.0, 4: 4.0 },
-      "AM": { 1: 38.0, 2: 46.0, 3: 7.0, 4: 4.0 },
-      "BA": { 1: 65.0, 2: 22.0, 3: 7.0, 4: 2.0 },
-      "CE": { 1: 62.0, 2: 26.0, 3: 6.0, 4: 2.0 },
-      "DF": { 1: 32.0, 2: 50.0, 3: 11.0, 4: 4.0 },
-      "ES": { 1: 34.0, 2: 50.0, 3: 8.0, 4: 4.0 },
-      "GO": { 1: 32.0, 2: 48.0, 3: 13.0, 4: 4.0 },
-      "MA": { 1: 65.0, 2: 22.0, 3: 7.0, 4: 2.0 },
-      "MG": { 1: 40.0, 2: 38.0, 3: 10.0, 4: 8.0 },
-      "MS": { 1: 32.0, 2: 50.0, 3: 10.0, 4: 4.0 },
-      "MT": { 1: 28.0, 2: 56.0, 3: 9.0, 4: 4.0 },
-      "PA": { 1: 47.0, 2: 39.0, 3: 7.0, 4: 3.0 },
-      "PB": { 1: 60.0, 2: 28.0, 3: 7.0, 4: 2.0 },
-      "PE": { 1: 62.0, 2: 27.0, 3: 6.0, 4: 2.0 },
-      "PI": { 1: 66.0, 2: 22.0, 3: 6.0, 4: 2.0 },
-      "PR": { 1: 28.0, 2: 54.0, 3: 9.0, 4: 4.0 },
-      "RJ": { 1: 36.0, 2: 48.0, 3: 8.0, 4: 4.0 },
-      "RN": { 1: 60.0, 2: 28.0, 3: 7.0, 4: 2.0 },
-      "RO": { 1: 24.0, 2: 60.0, 3: 9.0, 4: 4.0 },
-      "RR": { 1: 22.0, 2: 62.0, 3: 9.0, 4: 4.0 },
-      "RS": { 1: 34.0, 2: 50.0, 3: 8.0, 4: 4.0 },
-      "SC": { 1: 24.0, 2: 58.0, 3: 9.0, 4: 5.0 },
-      "SE": { 1: 60.0, 2: 28.0, 3: 7.0, 4: 2.0 },
-      "SP": { 1: 36.0, 2: 45.0, 3: 10.0, 4: 5.0 },
-      "TO": { 1: 40.0, 2: 44.0, 3: 9.0, 4: 4.0 },
-    },
-  },
-
-  {
-    id: "2026_simulado",
-    name: "Projeção 2026",
-    year: 2026,
-    description: "Cenário simulado para 2026",
-    candidates: [
-      {
-        name: "Candidato A",
-        vice: "Vice A",
-        party: "Partido A",
-        number: "1",
-        color: "#dc2626",
-        ideology: "Centro-Esquerda",
-      },
-      {
-        name: "Candidato B",
-        vice: "Vice B",
-        party: "Partido B",
-        number: "2",
-        color: "#1e40af",
-        ideology: "Centro-Direita",
-      },
-    ],
-  },
+  primeiroTurno2026Scenario,
+  segundoTurno2026Scenario,
 ];
