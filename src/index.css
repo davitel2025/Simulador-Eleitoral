@@ -1,1 +1,75 @@
 @import "tailwindcss";
+
+@layer components {
+  .candidate-range {
+    --candidate-color: #22c55e;
+    --track-pct: 50%;
+    height: 0.75rem;
+    width: 100%;
+    cursor: pointer;
+    appearance: none;
+    border-radius: 9999px;
+    background:
+      linear-gradient(90deg, var(--candidate-color) 0%, var(--candidate-color) var(--track-pct), rgb(30 41 59) var(--track-pct), rgb(30 41 59) 100%);
+    outline: none;
+  }
+
+  .candidate-range:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  .candidate-range::-webkit-slider-runnable-track {
+    height: 0.75rem;
+    border-radius: 9999px;
+    background: transparent;
+  }
+
+  .candidate-range::-webkit-slider-thumb {
+    width: 1.35rem;
+    height: 1.35rem;
+    margin-top: -0.31rem;
+    appearance: none;
+    border: 3px solid rgb(248 250 252);
+    border-radius: 9999px;
+    background: var(--candidate-color);
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--candidate-color) 22%, transparent), 0 0 22px var(--candidate-color);
+    transition: transform 160ms ease, box-shadow 160ms ease;
+  }
+
+  .candidate-range:focus::-webkit-slider-thumb,
+  .candidate-range:active::-webkit-slider-thumb {
+    transform: scale(1.15);
+  }
+
+  .candidate-range::-moz-range-track {
+    height: 0.75rem;
+    border-radius: 9999px;
+    background:
+      linear-gradient(90deg, var(--candidate-color) 0%, var(--candidate-color) var(--track-pct), rgb(30 41 59) var(--track-pct), rgb(30 41 59) 100%);
+  }
+
+  .candidate-range::-moz-range-thumb {
+    width: 1.35rem;
+    height: 1.35rem;
+    border: 3px solid rgb(248 250 252);
+    border-radius: 9999px;
+    background: var(--candidate-color);
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--candidate-color) 22%, transparent), 0 0 22px var(--candidate-color);
+    transition: transform 160ms ease, box-shadow 160ms ease;
+  }
+
+  .candidate-range:focus::-moz-range-thumb,
+  .candidate-range:active::-moz-range-thumb {
+    transform: scale(1.15);
+  }
+}
+
+@keyframes pulse-border {
+  0%, 100% {
+    stroke-opacity: 0.55;
+  }
+  50% {
+    stroke-opacity: 1;
+  }
+}

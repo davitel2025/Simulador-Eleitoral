@@ -16,6 +16,7 @@ export interface Candidate {
   partyLogo?: string;
   ideology?: string;
   coalition?: string;
+  locked?: boolean;
 }
 
 export interface StateInfo {

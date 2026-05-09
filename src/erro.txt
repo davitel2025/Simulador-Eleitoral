@@ -1,0 +1,29 @@
+ncaught ReferenceError: AnimatePresence is not defined
+    StateModal StateModal.tsx:465
+    React 18
+        react_stack_bottom_frame
+        renderWithHooks
+        updateFunctionComponent
+        beginWork
+        runWithFiberInDEV
+        performUnitOfWork
+        workLoopSync
+        renderRootSync
+        performWorkOnRoot
+        performSyncWorkOnRoot
+        flushSyncWorkAcrossRoots_impl
+        processRootScheduleInMicrotask
+        scheduleImmediateRootScheduleTask
+        scheduleImmediateRootScheduleTask
+        ensureRootIsScheduled
+        scheduleUpdateOnFiber
+        dispatchSetStateInternal
+        dispatchSetState
+    onEdit ElectionSimulator.tsx:2433
+    React 13
+    <anonymous> main.tsx:6
+StateModal.tsx:465:10
+An error occurred in the <StateModal> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.

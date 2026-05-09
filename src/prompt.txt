@@ -1,556 +1,167 @@
-# PROMPT COMPLETO PARA IA INTEGRADA AO TERMINAL
-
----
-
-Copie e cole TUDO abaixo desta linha na sua IA:
-
----
-
-Você é um desenvolvedor full-stack especialista em React + TypeScript + Vite + Tailwind CSS. Preciso que você faça três correções/melhorias no projeto **Simulador Eleitoral** que está no meu repositório local. O projeto usa as seguintes tecnologias: React 18, TypeScript, Vite, Tailwind CSS, Framer Motion, D3-geo, html2canvas. Leia com atenção TODOS os detalhes abaixo antes de fazer qualquer alteração.
-
----
-
-## ESTRUTURA DO PROJETO (para você se orientar)
-
-```
-/
-├── src/
-│   ├── App.tsx
-│   ├── types.ts
-│   ├── lib/
-│   │   └── utils.ts
-│   ├── data/
-│   │   ├── scenarios.ts           ← contém o array POLITICAL_SCENARIOS
-│   │   └── states.ts              ← contém array STATES com dados eleitorais
-│   ├── data_cenarios/
-│   │   ├── primeiro_turno_2026.json   ← JÁ EXISTE, não precisa criar
-│   │   └── segundo_turno_2026.json    ← JÁ EXISTE, não precisa criar
-│   └── components/
-│       ├── CandidateManager.tsx
-│       ├── UserIcon.tsx
-│       ├── screens/
-│       │   ├── InitialScreen.tsx
-│       │   ├── CandidateSetupScreen.tsx
-│       │   └── ElectionSimulator.tsx   ← contém o mapa interativo + lógica de zoom
-│       ├── modals/
-│       │   ├── NationalPhotoModal.tsx  ← modal de "Foto Nacional"
-│       │   ├── RegionalPhotoModal.tsx  ← modal de "Foto Regional"
-│       │   ├── StatePhotoModal.tsx     ← modal de "Foto Estadual"
-│       │   ├── StateModal.tsx
-│       │   ├── StateActionModal.tsx
-│       │   └── MunicipalityPaintModal.tsx
-│       └── photo/
-│           ├── PhotoCards.tsx          ← função captureAndDownload (usa html2canvas)
-│           └── MapCenters.tsx
-├── index.html
-└── package.json
-```
-
----
-
-## MODIFICAÇÃO 1 — Trocar os cenários de 2026 (1º e 2º turno) pelos arquivos JSON existentes
-
-### Contexto
-O arquivo `src/data/scenarios.ts` exporta o array `POLITICAL_SCENARIOS` do tipo `PoliticalScenario[]` (interface definida em `src/types.ts`). Atualmente existe no array um cenário de projeção 2026 que foi definido diretamente no código TypeScript. Preciso substituir esse cenário pelos dados que já estão em dois arquivos JSON separados:
-
-- `src/data_cenarios/primeiro_turno_2026.json` → cenário do 1º turno de 2026
-- `src/data_cenarios/segundo_turno_2026.json` → cenário do 2º turno de 2026
-
-### O que fazer
-
-1. **Abra e leia** os arquivos `src/data_cenarios/primeiro_turno_2026.json` e `src/data_cenarios/segundo_turno_2026.json` para entender a estrutura exata de dados que eles possuem (campos: `id`, `name`, `year`, `round`, `description`, `candidates`, `results`, `nationalVoters`, etc.).
-
-2. **No arquivo `src/data/scenarios.ts`**:
-   - Importe os dois arquivos JSON no topo do arquivo:
-     ```ts
-     import primeirTurno2026 from "../data_cenarios/primeiro_turno_2026.json";
-     import segundoTurno2026 from "../data_cenarios/segundo_turno_2026.json";
-     ```
-   - **Remova** qualquer cenário de 2026 que já exista no array `POLITICAL_SCENARIOS` (pode ter id `"2026"`, `"2026_1t"`, `"2026_2t"` ou similar — remova TODOS os que tiverem `year: 2026`).
-   - **Adicione** os dois cenários importados ao array `POLITICAL_SCENARIOS`, fazendo cast de tipo:
-     ```ts
-     primeirTurno2026 as unknown as PoliticalScenario,
-     segundoTurno2026 as unknown as PoliticalScenario,
-     ```
-   - A ordem recomendada no array é: cenários históricos primeiro (2018 2º turno, 2022 2º turno, 2018 1º turno, 2022 1º turno se existir), e os cenários 2026 por último (1º turno 2026 e 2º turno 2026).
-
-3. **Verifique o `tsconfig.json` ou `vite.config.ts`**: certifique-se de que a opção `resolveJsonModule` está habilitada (no `tsconfig.json` deve ter `"resolveJsonModule": true`). Se não estiver, adicione. Caso o projeto use Vite sem essa config, os imports de JSON funcionam nativamente no Vite — mas confirme que não há nenhum `assert { type: "json" }` necessário na versão do TypeScript usada.
-
-4. **Garanta** que a interface `PoliticalScenario` em `src/types.ts` está compatível com a estrutura dos JSONs. A interface atual é:
-   ```ts
-   export interface PoliticalScenario {
-     id: string;
-     name: string;
-     year: number;
-     round?: ElectionRound;           // "primeiro" | "segundo"
-     description: string;
-     candidates: Omit<Candidate, "id">[];
-     results?: Record<string, Record<number, number>>;
-     customStates?: CustomStateInfo[];
-     nationalVoters?: number;
-     isCustom?: boolean;
-   }
-   ```
-   Se os JSONs tiverem campos extras, adicione-os como opcionais (`campo?: tipo`) na interface. Não remova nenhum campo existente.
-
-5. **Não altere** os cenários de 2018 e 2022 que já existem no arquivo `scenarios.ts`.
-
----
-
-## MODIFICAÇÃO 2 — Corrigir a navegação do mapa (zoom centrado no cursor, não no centro do Brasil)
-
-### Contexto do problema
-O mapa interativo do Brasil está em `src/components/screens/ElectionSimulator.tsx`. Atualmente o zoom com scroll do mouse **sempre** dá zoom em direção ao centro geométrico do mapa (centro do Brasil, que fica próximo ao Mato Grosso), independentemente de onde o cursor do usuário está. O resultado é que se o usuário quer dar zoom no Amazonas, o mapa puxa para o Mato Grosso, tornando a navegação ruim.
-
-### Causa técnica
-O código atual de scroll wheel zoom em `ElectionSimulator.tsx` faz algo assim (procure pelo `useEffect` que contém `onWheel`):
-
-```ts
-useEffect(() => {
-  const mapNode = mapContainerRef.current;
-  if (!mapNode) return;
-  const onWheel = (event: WheelEvent) => {
-    event.preventDefault();
-    const delta = event.deltaY > 0 ? -0.12 : 0.12;
-    setMapZoom((prev) => clamp(Number((prev + delta).toFixed(2)), 0.5, 5));
-    // ← NÃO ajusta mapOffset baseado na posição do cursor
-  };
-  mapNode.addEventListener("wheel", onWheel, { passive: false });
-  return () => mapNode.removeEventListener("wheel", onWheel);
-}, []);
-```
-
-O zoom muda apenas a escala mas **não reposiciona** o offset para manter o ponto sob o cursor estático. Além disso, o `drag` do Framer Motion atualiza o `mapOffset` mas provavelmente com configuração que torna o arrasto pesado ou travado.
-
-### O que fazer
-
-#### 2.1 — Corrigir o zoom com scroll (zoom focado no cursor)
-
-Substitua o `useEffect` do `onWheel` em `ElectionSimulator.tsx` por uma versão que calcula o novo offset para manter o ponto sob o cursor fixo ao aplicar o zoom. A lógica é:
-
-```ts
-useEffect(() => {
-  const mapNode = mapContainerRef.current;
-  if (!mapNode) return;
-
-  const onWheel = (event: WheelEvent) => {
-    event.preventDefault();
-
-    const rect = mapNode.getBoundingClientRect();
-    // Posição do cursor RELATIVA ao container do mapa
-    const mouseX = event.clientX - rect.left;
-    const mouseY = event.clientY - rect.top;
-
-    const zoomFactor = event.deltaY > 0 ? -0.12 : 0.12;
-
-    setMapZoom((prevZoom) => {
-      const newZoom = clamp(
-        Number((prevZoom + zoomFactor).toFixed(2)),
-        0.5,
-        5
-      );
-      const scale = newZoom / prevZoom;
-
-      // Ajusta offset para manter o ponto sob o cursor fixo
-      setMapOffset((prevOffset) => ({
-        x: mouseX - scale * (mouseX - prevOffset.x),
-        y: mouseY - scale * (mouseY - prevOffset.y),
-      }));
-
-      return newZoom;
-    });
-  };
-
-  mapNode.addEventListener("wheel", onWheel, { passive: false });
-  return () => mapNode.removeEventListener("wheel", onWheel);
-}, []); // dependências vazias estão corretas pois usamos setters funcionais
-```
-
-**ATENÇÃO**: como o `setMapZoom` e `setMapOffset` são chamados dentro do callback funcional do `setMapZoom`, não haverá problema de stale closure. Mas confirme que `setMapOffset` é acessível dentro do callback — se necessário, use `useRef` para guardar os valores atuais de zoom e offset.
-
-Se usar `useRef` para evitar stale closures, adicione:
-```ts
-const mapZoomRef = useRef(mapZoom);
-const mapOffsetRef = useRef(mapOffset);
-
-useEffect(() => { mapZoomRef.current = mapZoom; }, [mapZoom]);
-useEffect(() => { mapOffsetRef.current = mapOffset; }, [mapOffset]);
-```
-
-E no `onWheel`:
-```ts
-const prevZoom = mapZoomRef.current;
-const prevOffset = mapOffsetRef.current;
-const newZoom = clamp(Number((prevZoom + zoomFactor).toFixed(2)), 0.5, 5);
-const scale = newZoom / prevZoom;
-setMapZoom(newZoom);
-setMapOffset({
-  x: mouseX - scale * (mouseX - prevOffset.x),
-  y: mouseY - scale * (mouseY - prevOffset.y),
-});
-```
-
-#### 2.2 — Suavizar o drag (arrasto do mapa)
-
-Procure no JSX de `ElectionSimulator.tsx` onde o componente de drag do Framer Motion está sendo usado (provavelmente um `<motion.div>` ou `<motion.g>` com prop `drag` ou `onPan`/`onDrag`). O drag atual pode estar travado porque:
-
-a) O Framer Motion `drag` tem inércia/constraints que travam, **OU**
-b) O mapa está usando `onPan` do Framer Motion que acumula offsets de forma incorreta.
-
-**Solução preferida** — substituir o arrasto do Framer Motion por eventos nativos de mouse/touch puros (mais confiável para SVG):
-
-Adicione os seguintes estados e refs:
-```ts
-const isDraggingRef = useRef(false);
-const lastMousePosRef = useRef({ x: 0, y: 0 });
-```
-
-No elemento container do mapa (o `div` que tem `ref={mapContainerRef}`), substitua as props de drag do Framer Motion por:
-```tsx
-onMouseDown={(e) => {
-  isDraggingRef.current = true;
-  lastMousePosRef.current = { x: e.clientX, y: e.clientY };
-  e.preventDefault();
-}}
-onMouseMove={(e) => {
-  if (!isDraggingRef.current) return;
-  const dx = e.clientX - lastMousePosRef.current.x;
-  const dy = e.clientY - lastMousePosRef.current.y;
-  lastMousePosRef.current = { x: e.clientX, y: e.clientY };
-  setMapOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
-}}
-onMouseUp={() => { isDraggingRef.current = false; }}
-onMouseLeave={() => { isDraggingRef.current = false; }}
-```
-
-Adicione também suporte a touch para mobile:
-```tsx
-onTouchStart={(e) => {
-  isDraggingRef.current = true;
-  const touch = e.touches[0];
-  lastMousePosRef.current = { x: touch.clientX, y: touch.clientY };
-}}
-onTouchMove={(e) => {
-  if (!isDraggingRef.current) return;
-  const touch = e.touches[0];
-  const dx = touch.clientX - lastMousePosRef.current.x;
-  const dy = touch.clientY - lastMousePosRef.current.y;
-  lastMousePosRef.current = { x: touch.clientX, y: touch.clientY };
-  setMapOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
-}}
-onTouchEnd={() => { isDraggingRef.current = false; }}
-```
-
-Se o mapa usa um `<motion.div>` com `onPan` do Framer Motion, remova as props `onPan`, `onPanStart`, `onPanEnd` e substitua pelo padrão acima com eventos nativos. Mantenha outros aspectos do Framer Motion nos estados dos estados (paths do SVG) se já existirem.
-
-#### 2.3 — Garantir que o cursor muda de aparência
-
-No container do mapa, adicione um estilo de cursor dinâmico para indicar que pode arrastar:
-```tsx
-style={{ cursor: isDragging ? "grabbing" : "grab" }}
-```
-Para isso, crie um estado `isDragging` (booleano) em vez de só o ref, ou use uma classe CSS condicional.
-
-#### 2.4 — Botão de Reset de Posição
-
-Se já existir um botão de "resetar zoom" no mapa, certifique-se de que ele também reseta o `mapOffset` para `{ x: 0, y: 0 }` junto com o `mapZoom` para `1`.
-
----
-
-## MODIFICAÇÃO 3 — Corrigir o botão "Salvar PNG" em todos os modais de foto
-
-### Contexto do problema
-O botão "Salvar PNG" nos três modais (`NationalPhotoModal.tsx`, `RegionalPhotoModal.tsx` e `StatePhotoModal.tsx`) usa a função `captureAndDownload` (ou `savePhotoPng`) definida em `src/components/photo/PhotoCards.tsx`. Essa função usa a biblioteca `html2canvas` internamente.
-
-Há **dois erros distintos** acontecendo:
-
-#### Erro 1 — Imagens externas bloqueadas por CORS (OpaqueResponseBlocking)
-```
-GET https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/Mourão_foto_oficial_(cropped).jpg/440px-Mourão_foto_oficial_(cropped).jpg
-NS_BINDING_ABORTED
-A resource is blocked by OpaqueResponseBlocking
-```
-O html2canvas tenta buscar imagens externas (fotos de candidatos do Wikimedia, etc.) mas o navegador bloqueia por política de CORS. O `useCORS: true` e `allowTaint: true` já estão configurados, mas não são suficientes porque o servidor do Wikimedia não envia headers CORS permissivos para todas as requisições.
-
-#### Erro 2 — Função de cor CSS não suportada (oklab)
-```
-Erro ao gerar PNG: Error: Attempting to parse an unsupported color function "oklab"
-    parse color.ts:15
-    parse index.ts:307
-    CSSParsedDeclaration2 index.ts:161
-    ElementContainer2 element-container.ts:27
-```
-O `html2canvas` não suporta funções de cor modernas como `oklab()`, `oklch()`, `color-mix()`, etc., que são geradas pelo Tailwind CSS v3.3+ e/ou por propriedades CSS modernas. O html2canvas tenta parsear os estilos computados e falha ao encontrar essas funções.
-
-### Solução completa para ambos os erros
-
-#### 3.1 — Resolver o erro de `oklab` (cor CSS não suportada)
-
-A solução é substituir o `html2canvas` por **`html-to-image`**, uma biblioteca mais moderna que usa a API nativa do browser (`foreignObject` do SVG + `Canvas`) e suporta funções de cor modernas.
-
-**Passo 1**: Instale a biblioteca:
-```bash
-npm install html-to-image
-```
-
-**Passo 2**: Abra `src/components/photo/PhotoCards.tsx` e localize a função `captureAndDownload`. Ela atualmente importa `html2canvas` dinamicamente. Substitua completamente pela implementação abaixo:
-
-```ts
-export async function captureAndDownload(
-  element: HTMLElement,
-  filename: string,
-  backgroundColor: string
-): Promise<void> {
-  try {
-    const { toPng } = await import("html-to-image");
-
-    // Pré-carrega todas as imagens como base64 para evitar problemas de CORS
-    await preloadImagesAsBase64(element);
-
-    const dataUrl = await toPng(element, {
-      backgroundColor,
-      pixelRatio: Math.max(2, window.devicePixelRatio || 1),
-      cacheBust: true,
-      includeQueryParams: true,
-      skipFonts: false,
-      filter: (node) => {
-        // Não pular nenhum elemento
-        return true;
-      },
-    });
-
-    const link = document.createElement("a");
-    link.download = filename;
-    link.href = dataUrl;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  } catch (error) {
-    console.error("Erro ao gerar PNG:", error);
-    alert(
-      "Erro ao salvar imagem. Verifique o console para detalhes.\n\n" +
-      "Dica: se o erro persistir, tente remover as fotos externas dos candidatos e usar apenas fotos enviadas por upload."
-    );
-  }
-}
-```
-
-**Passo 3**: Adicione a função auxiliar `preloadImagesAsBase64` ANTES da função `captureAndDownload` em `PhotoCards.tsx`:
-
-```ts
-/**
- * Percorre o elemento e substitui temporariamente todos os src de <img>
- * e url() de CSS por versões base64, contornando o bloqueio de CORS.
- * Apenas tenta converter — se falhar (CORS total), mantém o original e prossegue.
- */
-async function preloadImagesAsBase64(root: HTMLElement): Promise<void> {
-  const imgs = Array.from(root.querySelectorAll<HTMLImageElement>("img"));
-
-  await Promise.allSettled(
-    imgs.map(async (img) => {
-      const src = img.src;
-      if (!src || src.startsWith("data:")) return; // já é base64, pula
-
-      try {
-        const base64 = await fetchImageAsBase64(src);
-        img.src = base64;
-      } catch {
-        // silencia erros — mantém src original se não conseguir converter
-      }
-    })
-  );
-}
-
-/**
- * Faz fetch de uma imagem e retorna como data URL base64.
- * Tenta com proxy CORS se a requisição direta falhar.
- */
-async function fetchImageAsBase64(url: string): Promise<string> {
-  // Tenta buscar diretamente (funciona para imagens no mesmo domínio ou com CORS)
-  try {
-    const response = await fetch(url, { mode: "cors" });
-    if (response.ok) {
-      const blob = await response.blob();
-      return await blobToBase64(blob);
-    }
-  } catch {
-    // falha silenciosa, tenta proxy
-  }
-
-  // Tenta via proxy CORS público (corsproxy.io)
-  try {
-    const proxiedUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-    const response = await fetch(proxiedUrl);
-    if (response.ok) {
-      const blob = await response.blob();
-      return await blobToBase64(blob);
-    }
-  } catch {
-    // falha silenciosa
-  }
-
-  throw new Error(`Não foi possível carregar a imagem: ${url}`);
-}
-
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
-```
-
-#### 3.2 — Fallback com html2canvas caso html-to-image também falhe
-
-Se por qualquer motivo o `html-to-image` também falhar (por exemplo, em browsers muito antigos), adicione um fallback para `html2canvas` com a configuração mais robusta possível:
-
-```ts
-// No bloco catch da função captureAndDownload, antes do alert:
-try {
-  // Fallback: tenta html2canvas
-  const html2canvas = (await import("html2canvas")).default;
-  const canvas = await html2canvas(element, {
-    backgroundColor,
-    scale: Math.max(2, window.devicePixelRatio || 1),
-    useCORS: true,
-    allowTaint: true,
-    logging: false,
-    imageTimeout: 15000,
-    scrollX: 0,
-    scrollY: -window.scrollY,
-    windowWidth: document.documentElement.scrollWidth,
-    windowHeight: document.documentElement.scrollHeight,
-    onclone: (clonedDoc) => {
-      // Remove estilos problemáticos que html2canvas não entende
-      const allElements = clonedDoc.querySelectorAll("*");
-      allElements.forEach((el) => {
-        const htmlEl = el as HTMLElement;
-        // Remove classes Tailwind que geram oklab/oklch
-        htmlEl.style.colorScheme = "";
-        // Substitui cores oklch/oklab por equivalentes hex se possível
-        const computedStyle = window.getComputedStyle(htmlEl);
-        const color = computedStyle.color;
-        const bg = computedStyle.backgroundColor;
-        if (color.includes("oklab") || color.includes("oklch")) {
-          htmlEl.style.color = "#ffffff";
-        }
-        if (bg.includes("oklab") || bg.includes("oklch")) {
-          htmlEl.style.backgroundColor = backgroundColor;
-        }
-      });
-    },
-  });
-  const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, "image/png")
-  );
-  if (blob) {
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = filename;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    return;
-  }
-} catch (fallbackError) {
-  console.error("Fallback html2canvas também falhou:", fallbackError);
-}
-```
-
-#### 3.3 — Aplicar a correção em TODOS os três modais
-
-Verifique se `NationalPhotoModal.tsx`, `RegionalPhotoModal.tsx` e `StatePhotoModal.tsx` chamam a função `captureAndDownload` (ou `savePhotoPng`, verifique o nome exato que está sendo exportado/importado em cada arquivo). Todos os três devem usar a mesma função corrigida de `PhotoCards.tsx`. Não é necessário alterar os modais em si — basta garantir que eles importem e chamem a função corrigida.
-
-Se existir uma função chamada `savePhotoPng` em algum dos modais que **internamente** chame `captureAndDownload`, garanta que ela também está passando os parâmetros corretos.
-
-#### 3.4 — Verificar o tsconfig para imports de módulos
-
-Certifique-se de que o `tsconfig.json` tem:
-```json
-{
-  "compilerOptions": {
-    "moduleResolution": "bundler",  // ou "node16"
-    "resolveJsonModule": true,
-    "allowImportingTsExtensions": true
-  }
-}
-```
-
-#### 3.5 — Remover ou tornar opcional a dependência de imagens externas durante a captura
-
-Para evitar que imagens externas bloqueadas causem falha total da captura, envolva cada `<img>` com foto de candidato em um wrapper que tem `crossOrigin="anonymous"` e `referrerPolicy="no-referrer"`. Se as imagens de candidatos vierem de props `candidate.photo` (string que pode ser URL externa ou base64), aplique o seguinte no componente `CandidateImage` em `PhotoCards.tsx`:
-
-```tsx
-function CandidateImage({ candidate, className, fallbackClassName = "text-3xl" }: ...) {
-  const [hasImageError, setHasImageError] = useState(false);
-
-  if (!candidate.photo || hasImageError) {
-    return (
-      <div className={`flex h-full w-full items-center justify-center font-black ${fallbackClassName}`}
-           style={{ color: candidate.color }}>
-        {getCandidateInitials(candidate)}
-      </div>
-    );
-  }
-
-  return (
-    <img
-      src={candidate.photo}
-      alt={candidate.name}
-      className={className}
-      crossOrigin="anonymous"          // ← ADICIONAR
-      referrerPolicy="no-referrer"     // ← ADICIONAR
-      onError={() => setHasImageError(true)}
-    />
-  );
-}
-```
-
-Faça o mesmo para `candidate.vicePhoto` e `candidate.partyLogo` em todos os lugares onde são renderizados dentro dos modais de foto.
-
----
-
-## RESUMO DAS ALTERAÇÕES POR ARQUIVO
-
-| Arquivo | O que muda |
-|---|---|
-| `src/data/scenarios.ts` | Importar os JSONs de 2026 e substituir cenário 2026 hardcoded pelos importados |
-| `src/tsconfig.json` | Garantir `resolveJsonModule: true` |
-| `src/components/screens/ElectionSimulator.tsx` | Corrigir zoom (cursor-aware) e drag (events nativos) do mapa |
-| `src/components/photo/PhotoCards.tsx` | Substituir `captureAndDownload` por versão com `html-to-image` + pré-carregamento base64 + adicionar `crossOrigin` nas imgs |
-| `package.json` (via npm) | Instalar `html-to-image` |
-
----
-
-## INSTRUÇÕES FINAIS
-
-1. **Leia cada arquivo antes de editar** — use `cat` ou o editor para ver o conteúdo atual e entender onde exatamente fazer cada mudança.
-
-2. **Para a Modificação 1**: primeiro leia os JSONs em `src/data_cenarios/` para confirmar a estrutura antes de importar.
-
-3. **Para a Modificação 2**: procure no `ElectionSimulator.tsx` pelos termos `onWheel`, `mapZoom`, `mapOffset`, `onPan`, `drag` para achar os pontos exatos de edição. O arquivo tem ~1500 linhas, então procure com grep:
-   ```bash
-   grep -n "onWheel\|mapZoom\|mapOffset\|onPan\|drag\|isDrag" src/components/screens/ElectionSimulator.tsx
-   ```
-
-4. **Para a Modificação 3**: procure a função `captureAndDownload` em `src/components/photo/PhotoCards.tsx`:
-   ```bash
-   grep -n "captureAndDownload\|html2canvas\|savePhotoPng" src/components/photo/PhotoCards.tsx
-   ```
-
-5. **Após todas as edições**, rode:
-   ```bash
-   npm install html-to-image
-   npm run build
-   ```
-   E confirme que o build passa sem erros.
-
-6. **Se o TypeScript reclamar** dos imports de JSON com mensagem como "Consider using '--resolveJsonModule' to import module", adicione ao `tsconfig.json` a opção `"resolveJsonModule": true`. Se usar Vite com TypeScript strict, pode também precisar de `"moduleResolution": "bundler"`.
-
-7. **Não altere** os cenários de 2018 e 2022, o design/layout dos modais, nem nenhuma outra funcionalidade além das três listadas acima.
-
----
+Você é um engenheiro front-end sênior especializado em React, TypeScript, Tailwind CSS e Framer Motion. Você tem acesso completo ao meu repositório local do projeto "Simulador-Eleitoral" (https://github.com/davitel2025/Simulador-Eleitoral) e pode ler, editar e criar quaisquer arquivos necessários.
+
+O projeto é um simulador de eleições presidenciais brasileiro, feito com React + TypeScript + Vite + Tailwind CSS + Framer Motion + D3-geo. Ele possui:
+- Tela inicial com seleção de cenários históricos e personalizados
+- Tela de configuração de candidatos
+- Simulador principal com mapa interativo do Brasil, sidebar, modais de edição por estado/município, analytics e geração de imagens PNG
+
+Sua tarefa é MELHORAR PROFUNDAMENTE a funcionalidade de "Alterar Porcentagens" dos estados (o modal/componente que aparece quando o usuário clica em um estado no mapa e escolhe "Editar" → que leva ao StateEditModal ou equivalente com sliders) E também melhorar o HUB/painel principal (ElectionSimulator.tsx e seus sub-componentes de sidebar e analytics). Faça tudo diretamente nos arquivos do projeto.
+
+═══════════════════════════════════════════════════════════════
+PARTE 1 — MELHORIAS NA FUNCIONALIDADE "ALTERAR PORCENTAGENS"
+═══════════════════════════════════════════════════════════════
+
+O modal de edição de porcentagens por estado (StateEditModal.tsx ou equivalente) deve ser completamente reformulado com as seguintes adições e melhorias:
+
+1. SLIDER REDESENHADO (UX)
+   - Mantenha os sliders existentes (um por candidato), mas redesenhe-os visualmente:
+     * Trilha (track) do slider deve usar a cor do candidato (candidate.color) com gradiente e opacidade
+     * O "thumb" (bolinha do slider) deve ser maior, com sombra colorida (box-shadow usando a cor do candidato) e animação suave de escala ao focar/arrastar (transform scale 1.15)
+     * Exiba o valor atual (ex: "34,5%") em um tooltip flutuante acima do thumb enquanto o usuário arrasta, usando `useState` + `onMouseMove`/`onInput`
+     * Use `input[type=range]` com estilização via Tailwind + CSS customizado (`::-webkit-slider-thumb` e `::-webkit-slider-runnable-track` via `@layer components` ou `style` inline)
+
+2. CAMPO DE INPUT NUMÉRICO DIRETO
+   - Ao lado de cada slider, adicione um campo `<input type="number" />` que:
+     * Mostre o valor atual com 1 casa decimal
+     * Permita ao usuário digitar diretamente um valor entre 0 e 100
+     * Ao alterar o número, aplique a normalização automática nos outros candidatos (redistribuição proporcional)
+     * Tenha borda colorida com a cor do candidato ao focar (`focus:ring` com a cor do `candidate.color`)
+     * Tenha largura fixa de ~80px, centralizado e estilizado com bg-slate-800 e texto branco
+
+3. BOTÕES DE PRESET RÁPIDO (Quick-fill)
+   - Acima dos sliders, adicione uma faixa de botões de atalho com presets de distribuição:
+     * "Empate técnico" → distribui 100% igualmente entre todos os candidatos
+     * "Vantagem [NomeCandidato1]" → distribui 60% para o candidato 1 e o restante igualmente
+     * "Vantagem [NomeCandidato2]" → igual, mas para o candidato 2 (e assim por diante, gere dinamicamente para cada candidato)
+     * "Aleatório" → sorteia porcentagens aleatórias que somam 100%, usando Math.random() normalizado
+     * "Limpar" → zera todos os campos e reseta para distribuição igual
+   - Botões pequenos e elegantes com estilo `outline` (borda colorida, fundo transparente), fonte pequena (text-xs), com hover que preenche o fundo
+   - Cada botão de "Vantagem X" deve ter um indicador circular com a cor do candidato à esquerda
+
+4. BARRA DE TOTAL VISUAL (Live Sum Indicator)
+   - Abaixo de todos os sliders, exiba uma barra horizontal que:
+     * Mostra o total atual de todas as porcentagens somadas (deve sempre ser 100%)
+     * Cada segmento da barra tem a largura proporcional à porcentagem e a cor do candidato
+     * Tem animação suave via CSS `transition: width 0.3s ease`
+     * Exibe o nome abreviado (ou número) de cada candidato dentro do segmento quando o segmento for largo o suficiente (> 10%)
+     * Abaixo da barra, exibe "Total: 100,0%" em texto, com cor verde se exatamente 100, amarela se diferente (para casos de edição manual temporária)
+
+5. MODO "TRAVAR CANDIDATO" (Lock)
+   - Ao lado do nome de cada candidato no modal, adicione um ícone de cadeado (🔒/🔓) que, ao clicar:
+     * Marca aquele candidato como "travado" — sua porcentagem não muda quando os outros sliders são movidos
+     * A redistribuição proporcional ao mexer em um slider acontece SOMENTE nos candidatos não travados
+     * Quando travado, o slider fica com `opacity: 0.5` e `pointer-events: none`
+     * O cadeado ativo fica com cor amarela/âmbar, o inativo com cinza
+
+6. HISTÓRICO DE ALTERAÇÕES COM UNDO (Ctrl+Z)
+   - Implemente um histórico de até 10 estados anteriores usando `useRef` com um array de snapshots do objeto `votes`
+   - Adicione um botão "↩ Desfazer" no modal, visível apenas quando há histórico disponível
+   - Ao clicar em Desfazer, restaura o último estado salvo do objeto `votes` e atualiza os sliders
+   - Use `useEffect` para registrar cada mudança no histórico com debounce de 300ms (para não salvar a cada pixel do slider)
+
+7. COMPARAÇÃO COM MÉDIA NACIONAL (Benchmark Visual)
+   - Se o cenário carregado (loadedScenario) tiver resultados preenchidos em outros estados, calcule a média nacional atual de cada candidato (já disponível no componente pai como `national.candidatePcts`)
+   - No modal de cada estado, exiba abaixo do slider de cada candidato uma linha fina indicando a média nacional daquele candidato (uma marcação vertical na trilha do slider, tipo linha pontilhada)
+   - Adicione um pequeno texto "Média nacional: X%" logo abaixo do slider, em cinza claro (text-slate-400, text-xs)
+
+8. VISUALIZAÇÃO PRÉVIA DO MAPA DO ESTADO (Minimap Preview)
+   - No topo do modal de edição, exiba um pequeno SVG do contorno geográfico do estado sendo editado (usando os dados já disponíveis em `stateGeoData` do componente pai, passando como prop para o modal)
+   - Pinte esse mini SVG com a cor do candidato vencedor atual do estado (atualizada em tempo real conforme o usuário mexe nos sliders, antes de salvar)
+   - Coloque o nome completo do estado e sua sigla UF abaixo do minimap
+
+9. ANIMAÇÃO DE TRANSIÇÃO DO MODAL
+   - O modal de edição deve usar `motion.div` do Framer Motion com:
+     * `initial={{ opacity: 0, scale: 0.92, y: 20 }}`
+     * `animate={{ opacity: 1, scale: 1, y: 0 }}`
+     * `exit={{ opacity: 0, scale: 0.92, y: 20 }}`
+     * `transition={{ duration: 0.22, ease: "easeOut" }}`
+   - Use `AnimatePresence` ao redor do modal no componente pai
+
+10. BOTÃO "APLICAR A TODOS OS ESTADOS DA REGIÃO"
+    - No rodapé do modal de edição, adicione um botão secundário "Aplicar a toda a região [NomeDaRegião]"
+    - Ao clicar, abre um pequeno popover/dialog de confirmação: "Deseja aplicar estas porcentagens para todos os estados da região X? Esta ação substituirá os dados existentes."
+    - Com confirmação, itera sobre todos os estados da mesma região (use a constante STATES e o campo `region` de cada estado) e aplica o mesmo objeto `votes` do estado atual para todos eles via `setResults` no componente pai
+    - Passe uma prop `onApplyToRegion: (votes: Record<number, number>, region: string) => void` do pai para o modal
+
+═══════════════════════════════════════════════════════════════
+PARTE 2 — MELHORIAS NO HUB/PAINEL PRINCIPAL (UI GERAL)
+═══════════════════════════════════════════════════════════════
+
+11. HEADER REDESENHADO
+    - O header (barra superior com nome do cenário, badges de turno e mini ranking) deve ser reformulado:
+      * Adicione um gradiente sutil no fundo: `bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900` com `border-b border-slate-700/50`
+      * A barra de progresso dos candidatos (parte de baixo do header) deve ter segmentos animados com `transition-all duration-700 ease-in-out` ao mudar de valor
+      * Adicione um contador de "X estados preenchidos de Y" com ícone de mapa (🗺️) que pisca suavemente (animate-pulse) enquanto o total for < totalActiveStates
+      * O badge de turno (1º/2º) deve ter um efeito de brilho sutil via `box-shadow: 0 0 12px currentColor`
+
+12. SIDEBAR REFORMULADA
+    - A sidebar esquerda (Sidebar.tsx) deve receber as seguintes melhorias:
+      * Adicione uma seção "⚡ Ações Rápidas" no topo com os botões: "Preencher Todos Aleatório" (distribui votos aleatórios em todos os estados de uma vez), "Zerar Todos os Estados" (limpa todos os resultados com confirmação), "Copiar Link do Cenário" (copia a URL atual ou um link gerado)
+      * O botão "Preencher Todos Aleatório" deve chamar `setResults` iterando sobre `activeStates` e gerando porcentagens aleatórias normalizadas para cada estado
+      * Adicione separadores visuais (`<hr className="border-slate-700/50 my-3" />`) entre as seções
+      * Cada candidato listado na sidebar deve ter uma mini barra de progresso horizontal colorida com sua porcentagem nacional
+      * Ao passar o mouse sobre cada candidato na sidebar, destaque os estados que aquele candidato está vencendo no mapa (passe um `setHighlightCandidate` state para o mapa)
+
+13. MAPA PRINCIPAL — MELHORIAS VISUAIS
+    - No SVG do mapa (onde os paths são renderizados):
+      * Adicione um efeito de "pulse" nos estados sem dados (não preenchidos): aplique uma animação CSS `@keyframes pulse-border` que faz a borda do estado piscar levemente em cinza, sinalizando que ainda não foi editado
+      * Ao hoverar um estado, exiba o tooltip existente MAS adicione também um mini sparkline (gráfico de barrinhas simples) mostrando a distribuição dos votos entre candidatos, usando divs com altura proporcional e cor do candidato
+      * Adicione um botão flutuante "Centralizar Mapa" (ícone de crosshair ⊕) no canto inferior direito do mapa, que ao clicar reseta `mapZoom` para 1 e `mapOffset` para `{x: 0, y: 0}` com animação suave via `useState` + transição CSS
+
+14. ANALYTICS — MELHORIAS NAS TABS
+    - Tab "📊 Desempenho Geral":
+      * Transforme os números simples em cards com bordas coloridas e ícones
+      * Adicione um gráfico de barras horizontais simples (usando apenas divs Tailwind, sem biblioteca externa) mostrando % nacional de cada candidato, com animação de entrada (`transition-all duration-1000`) ao trocar de tab
+    - Tab "🏆 Ranking de Estados":
+      * Adicione filtro por região: um `<select>` ou botões de filtro rápido (ex: "Norte", "Nordeste", etc.) acima da lista, para filtrar os estados exibidos
+      * Adicione campo de busca (`<input type="text" />`) para filtrar estados por nome
+      * Cada item do ranking deve mostrar uma mini barra de votos colorida por candidato (proporção visual)
+    - Tab "🗺️ Ganhos por Região":
+      * Ao clicar em uma região no mapa mini, além de focar a região, faça um scroll suave até a lista de detalhes daquela região na seção abaixo
+    - Tab "🎯 Candidatos":
+      * Adicione um botão "Editar Candidato" em cada card que abre a tela de configuração de candidatos para aquele candidato específico (chame `onCandidatesChange` ou equivalente)
+      * Adicione uma linha de tendência fictícia (simulada) abaixo de cada candidato: "📈 +2,3pp desde o último save" — compare o valor atual com um snapshot salvo em `useRef` ao abrir o simulador
+
+15. MODAL DE MENU DO ESTADO (StateMenuModal) — REDESIGN
+    - O modal que aparece ao clicar num estado (com as opções Editar, Foto, Municípios, Resetar) deve ser redesenhado:
+      * Use um layout de grid 2x2 com cards grandes e ícones centralizados (ao invés de lista de botões)
+      * Cada card deve ter hover com escala (scale-105) e fundo levemente colorido
+      * Adicione uma 5ª opção: "📋 Copiar de outro estado" — abre um `<select>` com todos os estados que já têm dados preenchidos, e ao selecionar, copia os votos daquele estado para o estado atual
+      * Mostre no topo do modal: nome do estado, sigla UF, e um mini resumo dos dados atuais (quem está vencendo e com qual %) ou "Sem dados" se vazio
+
+16. FEEDBACK VISUAL DE AÇÕES (Toast Notifications)
+    - Implemente um sistema simples de notificações toast (sem biblioteca externa, apenas React state + Framer Motion):
+      * Crie um componente `Toast.tsx` em `src/components/ui/Toast.tsx` com um estado global (via Context ou prop drilling do App.tsx)
+      * Exiba toasts no canto inferior direito da tela com `AnimatePresence` e animação de slide-up
+      * Dispare toasts nas seguintes ações:
+        - "✅ Estado [UF] salvo com sucesso!" ao salvar um estado
+        - "✅ Cenário exportado!" ao exportar JSON
+        - "📥 Cenário importado com sucesso!" ao importar
+        - "🎲 Dados aleatórios aplicados a todos os estados!" ao usar o preencher aleatório
+        - "↩ Alteração desfeita!" ao usar o undo
+      * Cada toast some automaticamente após 3 segundos com `setTimeout`
+
+═══════════════════════════════════════════════════════════════
+INSTRUÇÕES TÉCNICAS OBRIGATÓRIAS
+═══════════════════════════════════════════════════════════════
+
+- NÃO quebre nenhuma funcionalidade existente: mapa, zoom, drag, geração de fotos PNG (html2canvas), importação/exportação JSON, pintura de municípios
+- NÃO remova nenhuma prop ou type existente sem migrar corretamente — o projeto usa TypeScript strict
+- Mantenha TODOS os tipos TypeScript definidos em `src/types/index.ts` e expanda-os conforme necessário (ex: adicionar `locked?: boolean` em Candidate, adicionar novas props nos modais)
+- Toda estilização deve usar APENAS Tailwind CSS + Framer Motion (sem CSS Modules, sem styled-components). Para customizações de input[type=range], use `style` prop inline em React
+- Para os sliders customizados (`input[type=range]`), injete os estilos necessários para `::-webkit-slider-thumb` e `::-webkit-slider-runnable-track` via um `<style>` tag dentro do componente ou via `index.css` usando `@layer components`
+- Respeite o padrão de nomenclatura de arquivos já existente: PascalCase para componentes, camelCase para utils/hooks
+- Novos hooks devem ficar em `src/hooks/`, novos componentes de UI genéricos em `src/components/ui/`, novos componentes de modal em `src/components/modals/`
+- O projeto usa `usePersistedState` (hook customizado com localStorage) — use-o para persistir preferências novas como "modo de exibição do modal" se necessário
+- Use `useMemo` e `useCallback` onde apropriado para evitar re-renders desnecessários
+- Certifique-se de que o projeto continua buildando sem erros: rode `npm run build` ao final e corrija todos os erros de TypeScript e de importação antes de finalizar
+- Não altere `vite.config.ts`, `package.json` nem arquivos de configuração raiz. Instale novas dependências com `npm install` apenas SE absolutamente necessário (o ideal é não precisar)
+- Mantenha o design dark (fundo slate-900/slate-800), com acentos coloridos pelos candidatos — não introduza fundos claros
+- Toda interface deve ser responsiva: funcionar em telas de 1024px de largura mínima (o projeto é desktop-first)
+
+Comece lendo todos os arquivos relevantes antes de modificar qualquer um. Priorize as mudanças na seguinte ordem:
+1. StateEditModal.tsx (melhorias nos sliders — itens 1 a 10)
+2. Toast.tsx (novo componente — item 16)
+3. StateMenuModal.tsx (redesign — item 15)
+4. Sidebar.tsx (item 12)
+5. ElectionSimulator.tsx (header, mapa, analytics — itens 11, 13, 14)
