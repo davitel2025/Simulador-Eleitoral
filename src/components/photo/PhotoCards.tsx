@@ -118,26 +118,46 @@ async function preloadImagesAsBase64(root: HTMLElement): Promise<() => void> {
 }
 
 async function fetchImageAsBase64(url: string): Promise<string> {
-  try {
-    const response = await fetch(url, { mode: "cors" });
-    if (response.ok) {
-      return await blobToBase64(await response.blob());
-    }
-  } catch {
-    // Tenta proxy publico abaixo.
+  const resolvedUrl = await resolveCaptureImageUrl(url);
+  const response = await fetch(resolvedUrl, { mode: "cors" });
+  if (response.ok) {
+    return await blobToBase64(await response.blob());
   }
 
-  try {
-    const proxiedUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-    const response = await fetch(proxiedUrl);
-    if (response.ok) {
-      return await blobToBase64(await response.blob());
-    }
-  } catch {
-    // Reporta erro unico ao chamador.
+  throw new Error(`Nao foi possivel carregar a imagem: ${resolvedUrl}`);
+}
+
+async function resolveCaptureImageUrl(url: string): Promise<string> {
+  if (!url.includes("commons.wikimedia.org/wiki/Special:")) {
+    return url;
   }
 
-  throw new Error(`Nao foi possivel carregar a imagem: ${url}`);
+  const parsedUrl = new URL(url);
+  const fileName = decodeURIComponent(parsedUrl.pathname.split("/").pop() ?? "");
+  if (!fileName) {
+    return url;
+  }
+
+  const width = parsedUrl.searchParams.get("width") ?? "500";
+  const apiUrl = new URL("https://commons.wikimedia.org/w/api.php");
+  apiUrl.searchParams.set("action", "query");
+  apiUrl.searchParams.set("format", "json");
+  apiUrl.searchParams.set("origin", "*");
+  apiUrl.searchParams.set("prop", "imageinfo");
+  apiUrl.searchParams.set("iiprop", "url");
+  apiUrl.searchParams.set("iiurlwidth", width);
+  apiUrl.searchParams.set("titles", `File:${fileName}`);
+
+  const response = await fetch(apiUrl.toString(), { mode: "cors" });
+  if (!response.ok) {
+    return url;
+  }
+
+  const data = await response.json();
+  const pages = data?.query?.pages;
+  const page = pages ? Object.values(pages)[0] as any : null;
+  const imageInfo = page?.imageinfo?.[0];
+  return imageInfo?.thumburl ?? imageInfo?.url ?? url;
 }
 
 function blobToBase64(blob: Blob): Promise<string> {

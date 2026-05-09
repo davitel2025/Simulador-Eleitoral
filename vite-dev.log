@@ -3,7 +3,25 @@
 > vite --host 127.0.0.1
 
 
-  [32m[1mVITE[22m v7.2.4[39m  [2mready in [0m[1m453[22m[2m[0m ms[22m
+  [32m[1mVITE[22m v7.2.4[39m  [2mready in [0m[1m455[22m[2m[0m ms[22m
 
   [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m5173[22m/[39m
-[2m21:26:25[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css, /src/components/modals/StateModal.tsx[22m
+[2m10:18:27[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
+[2m10:25:02[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css, /src/components/screens/InitialScreen.tsx[22m
+[2m10:26:49[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/screens/InitialScreen.tsx, /src/index.css[22m
+[2m10:26:49[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css, /src/components/screens/InitialScreen.tsx[22m
+[2m10:29:01[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css, /src/components/screens/InitialScreen.tsx[22m
+[2m10:29:06[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css, /src/components/screens/InitialScreen.tsx[22m
+[2m10:29:11[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css, /src/components/screens/InitialScreen.tsx[22m
+[2m10:31:07[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/screens/CandidateSetupScreen.tsx, /src/index.css[22m
+[2m10:31:07[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/screens/CandidateSetupScreen.tsx, /src/index.css[22m
+[2m10:32:14[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css, /src/components/CandidateManager.tsx[22m
+[2m10:32:14[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css, /src/components/CandidateManager.tsx[22m
+[2m10:35:21[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css, /src/components/screens/InitialScreen.tsx, /src/components/screens/CandidateSetupScreen.tsx[22m
+[2m10:38:56[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css, /src/components/screens/InitialScreen.tsx, /src/components/screens/CandidateSetupScreen.tsx[22m
+[2m10:39:43[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css, /src/components/screens/InitialScreen.tsx[22m
+[2m10:40:20[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css, /src/components/screens/InitialScreen.tsx[22m
+[2m10:41:08[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css, /src/components/screens/InitialScreen.tsx, /src/components/screens/CandidateSetupScreen.tsx[22m
+[2m10:44:03[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
+[2m10:52:49[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css, /src/components/screens/InitialScreen.tsx, /src/components/screens/CandidateSetupScreen.tsx[22m
+[2m10:53:26[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css, /src/components/photo/PhotoCards.tsx[22m

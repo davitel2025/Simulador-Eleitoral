@@ -1,4 +1,5 @@
-import type { PoliticalScenario } from "../types";
+import type { Candidate, PoliticalScenario } from "../types";
+import { CANDIDATE_IMAGES, PARTY_LOGOS } from "./presetCandidates";
 import primeirTurno2026 from "../data_cenarios/primeiro_turno_2026.json";
 import segundoTurno2026 from "../data_cenarios/segundo_turno_2026.json";
 
@@ -35,6 +36,88 @@ const segundoTurno2026Scenario = {
   results: normalizeScenarioResults(segundoTurno2026.results),
 } as unknown as PoliticalScenario;
 
+function getHistoricalAssets(
+  scenarioId: string,
+  candidate: Omit<Candidate, "id">
+): Partial<Omit<Candidate, "id">> {
+  const partyNumber = `${candidate.party}:${candidate.number}`;
+
+  if (scenarioId === "2018" || scenarioId === "2018_1t") {
+    if (partyNumber === "PSL:17") {
+      return {
+        photo: scenarioId === "2018_1t" ? CANDIDATE_IMAGES.jairBolsonaro2018 : CANDIDATE_IMAGES.jairBolsonaro,
+        vicePhoto: CANDIDATE_IMAGES.hamiltonMourao,
+        partyLogo: PARTY_LOGOS.psl,
+      };
+    }
+    if (partyNumber === "PT:13") {
+      return {
+        photo: CANDIDATE_IMAGES.fernandoHaddad,
+        vicePhoto: CANDIDATE_IMAGES.manuelaDavila,
+        partyLogo: PARTY_LOGOS.pt,
+      };
+    }
+  }
+
+  if (scenarioId === "2022" || scenarioId === "2022_1t") {
+    if (partyNumber === "PT:13") {
+      return {
+        photo: CANDIDATE_IMAGES.lula,
+        vicePhoto: CANDIDATE_IMAGES.geraldoAlckmin,
+        partyLogo: PARTY_LOGOS.pt,
+      };
+    }
+    if (partyNumber === "PL:22") {
+      return {
+        photo: CANDIDATE_IMAGES.jairBolsonaro,
+        vicePhoto: CANDIDATE_IMAGES.bragaNetto,
+        partyLogo: PARTY_LOGOS.pl,
+      };
+    }
+  }
+
+  if (scenarioId === "2018_1t") {
+    if (partyNumber === "PDT:12") {
+      return { photo: CANDIDATE_IMAGES.ciroGomes, partyLogo: PARTY_LOGOS.pdt };
+    }
+    if (partyNumber === "PSDB:45") {
+      return { photo: CANDIDATE_IMAGES.geraldoAlckmin, partyLogo: PARTY_LOGOS.psdb };
+    }
+    if (partyNumber === "NOVO:30") {
+      return { photo: CANDIDATE_IMAGES.joaoAmoedo, partyLogo: PARTY_LOGOS.novo };
+    }
+  }
+
+  if (scenarioId === "2022_1t") {
+    if (partyNumber === "MDB:15") {
+      return {
+        photo: CANDIDATE_IMAGES.simoneTebet,
+        vicePhoto: CANDIDATE_IMAGES.maraGabrilli,
+        partyLogo: PARTY_LOGOS.mdb,
+      };
+    }
+    if (partyNumber === "PDT:12") {
+      return { photo: CANDIDATE_IMAGES.ciroGomes, partyLogo: PARTY_LOGOS.pdt };
+    }
+  }
+
+  return {};
+}
+
+function withHistoricalAssets(scenario: PoliticalScenario): PoliticalScenario {
+  if (!["2018", "2022", "2018_1t", "2022_1t"].includes(scenario.id)) {
+    return scenario;
+  }
+
+  return {
+    ...scenario,
+    candidates: scenario.candidates.map((candidate) => ({
+      ...candidate,
+      ...getHistoricalAssets(scenario.id, candidate),
+    })),
+  };
+}
+
 // Dados oficiais TSE — 2º turno
 // 2018: Bolsonaro × Haddad — 104.820.213 votos válidos nacionais
 // 2022: Lula × Bolsonaro   — 118.228.673 votos válidos nacionais
@@ -43,7 +126,7 @@ const segundoTurno2026Scenario = {
 // Os votos absolutos são calculados em ElectionSimulator usando
 // voters2018 / voters2022 de states.ts (votos válidos reais por estado).
 
-export const POLITICAL_SCENARIOS: PoliticalScenario[] = [
+const RAW_POLITICAL_SCENARIOS: PoliticalScenario[] = [
   // ─────────────────────────────────────────────────────────────────────────
   // ELEIÇÕES 2018 — 2º TURNO
   // Bolsonaro (PSL) = candidato 1  |  Haddad (PT) = candidato 2
@@ -61,10 +144,9 @@ export const POLITICAL_SCENARIOS: PoliticalScenario[] = [
         number: "17",
         color: "#1e40af",
         ideology: "Direita",
-        photo:
-          "https://upload.wikimedia.org/wikipedia/commons/thumb/3/37/Jair_Bolsonaro_2019_Portrait_%283x4_cropped_center%29.jpg/960px-Jair_Bolsonaro_2019_Portrait_%283x4_cropped_center%29.jpg",
-        vicePhoto:
-          "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/Mour%C3%A3o_foto_oficial_%28cropped%29.jpg/440px-Mour%C3%A3o_foto_oficial_%28cropped%29.jpg",
+        photo: CANDIDATE_IMAGES.jairBolsonaro,
+        vicePhoto: CANDIDATE_IMAGES.hamiltonMourao,
+        partyLogo: PARTY_LOGOS.psl,
       },
       {
         name: "Fernando Haddad",
@@ -73,10 +155,9 @@ export const POLITICAL_SCENARIOS: PoliticalScenario[] = [
         number: "13",
         color: "#dc2626",
         ideology: "Esquerda",
-        photo:
-          "https://www.fenajufe.org.br/wp-content/uploads/2018/10/0001hADDAD19OUT2018.jpg",
-        vicePhoto:
-          "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/Manuela_d%27Avila_foto_oficial.jpg/440px-Manuela_d%27Avila_foto_oficial.jpg",
+        photo: CANDIDATE_IMAGES.fernandoHaddad,
+        vicePhoto: CANDIDATE_IMAGES.manuelaDavila,
+        partyLogo: PARTY_LOGOS.pt,
       },
     ],
     // Porcentagens dos votos válidos — fonte TSE (2º turno 28/10/2018)
@@ -128,10 +209,9 @@ export const POLITICAL_SCENARIOS: PoliticalScenario[] = [
         number: "13",
         color: "#dc2626",
         ideology: "Esquerda",
-        photo:
-          "https://s2-valor.glbimg.com/hrCeXhkq6K3qhOcxCsmmNsXftjQ=/0x0:2775x1850/924x0/smart/filters:strip_icc()/i.s3.glbimg.com/v1/AUTH_63b422c2caee4269b8b34177e8876b93/internal_photos/bs/2022/R/N/KYBjTgRyO1r8ibD8RmUA/c158e26e504b4ba88530ec867cb099f5-9624a.jpg",
-        vicePhoto:
-          "https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Geraldo_Alckmin_2022.jpg/440px-Geraldo_Alckmin_2022.jpg",
+        photo: CANDIDATE_IMAGES.lula,
+        vicePhoto: CANDIDATE_IMAGES.geraldoAlckmin,
+        partyLogo: PARTY_LOGOS.pt,
       },
       {
         name: "Jair Bolsonaro",
@@ -140,10 +220,9 @@ export const POLITICAL_SCENARIOS: PoliticalScenario[] = [
         number: "22",
         color: "#1e40af",
         ideology: "Direita",
-        photo:
-          "https://upload.wikimedia.org/wikipedia/commons/3/33/Jair_Bolsonaro_2022_%28cropped%29.jpg",
-        vicePhoto:
-          "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/Braga_Netto_foto_oficial.jpg/440px-Braga_Netto_foto_oficial.jpg",
+        photo: CANDIDATE_IMAGES.jairBolsonaro,
+        vicePhoto: CANDIDATE_IMAGES.bragaNetto,
+        partyLogo: PARTY_LOGOS.pl,
       },
     ],
     // Porcentagens dos votos válidos — fonte TSE (2º turno 30/10/2022)
@@ -188,11 +267,11 @@ export const POLITICAL_SCENARIOS: PoliticalScenario[] = [
     round: "primeiro",
     description: "Resultado do 1º turno de 2018 (Dados oficiais TSE — 7/10/2018)",
     candidates: [
-      { name: "Jair Bolsonaro", vice: "Hamilton Mourão", party: "PSL", number: "17", color: "#1e40af", ideology: "Direita", photo: "https://upload.wikimedia.org/wikipedia/commons/d/d0/Jair_Bolsonaro_pela_EC_77_-M%C3%A9dico_Militar_no_SUS%28cropped%29.jpg", coalition: "Brasil Acima de Tudo, Deus Acima de Todos" },
-      { name: "Fernando Haddad", vice: "Manuela D'Ávila", party: "PT", number: "13", color: "#dc2626", ideology: "Esquerda", photo: "https://www.fenajufe.org.br/wp-content/uploads/2018/10/0001hADDAD19OUT2018.jpg", coalition: "O Povo Feliz de Novo" },
-      { name: "Ciro Gomes", vice: "Kátia Abreu", party: "PDT", number: "12", color: "#f97316", ideology: "Centro-Esquerda", photo: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/Ciro_Gomes_2022_%28cropped%29.jpg/440px-Ciro_Gomes_2022_%28cropped%29.jpg", coalition: "PDT / Solidariedade / Avante" },
-      { name: "Geraldo Alckmin", vice: "Ana Amélia Lemos", party: "PSDB", number: "45", color: "#3b82f6", ideology: "Centro", photo: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Geraldo_Alckmin_2022.jpg/440px-Geraldo_Alckmin_2022.jpg", coalition: "União pelo Brasil" },
-      { name: "João Amoêdo", vice: "Christian Lohbauer", party: "NOVO", number: "30", color: "#f59e0b", ideology: "Direita Liberal", photo: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/Jo%C3%A3o_Amoedo_foto_oficial.jpg/440px-Jo%C3%A3o_Amoedo_foto_oficial.jpg", coalition: "" },
+      { name: "Jair Bolsonaro", vice: "Hamilton Mourão", party: "PSL", number: "17", color: "#1e40af", ideology: "Direita", photo: CANDIDATE_IMAGES.jairBolsonaro2018, vicePhoto: CANDIDATE_IMAGES.hamiltonMourao, partyLogo: PARTY_LOGOS.psl, coalition: "Brasil Acima de Tudo, Deus Acima de Todos" },
+      { name: "Fernando Haddad", vice: "Manuela D'Ávila", party: "PT", number: "13", color: "#dc2626", ideology: "Esquerda", photo: CANDIDATE_IMAGES.fernandoHaddad, vicePhoto: CANDIDATE_IMAGES.manuelaDavila, partyLogo: PARTY_LOGOS.pt, coalition: "O Povo Feliz de Novo" },
+      { name: "Ciro Gomes", vice: "Kátia Abreu", party: "PDT", number: "12", color: "#f97316", ideology: "Centro-Esquerda", photo: CANDIDATE_IMAGES.ciroGomes, partyLogo: PARTY_LOGOS.pdt, coalition: "PDT / Solidariedade / Avante" },
+      { name: "Geraldo Alckmin", vice: "Ana Amélia Lemos", party: "PSDB", number: "45", color: "#3b82f6", ideology: "Centro", photo: CANDIDATE_IMAGES.geraldoAlckmin, partyLogo: PARTY_LOGOS.psdb, coalition: "União pelo Brasil" },
+      { name: "João Amoêdo", vice: "Christian Lohbauer", party: "NOVO", number: "30", color: "#f59e0b", ideology: "Direita Liberal", photo: CANDIDATE_IMAGES.joaoAmoedo, partyLogo: PARTY_LOGOS.novo, coalition: "" },
     ],
     results: {
       "AC": { 1: 61.38, 2: 17.28, 3: 9.42, 4: 6.11, 5: 2.01 },
@@ -232,10 +311,10 @@ export const POLITICAL_SCENARIOS: PoliticalScenario[] = [
     round: "primeiro",
     description: "Resultado do 1º turno de 2022 (Dados oficiais TSE — 2/10/2022)",
     candidates: [
-      { name: "Luiz Inácio Lula da Silva", vice: "Geraldo Alckmin", party: "PT", number: "13", color: "#dc2626", ideology: "Esquerda", photo: "https://s2-valor.glbimg.com/hrCeXhkq6K3qhOcxCsmmNsXftjQ=/0x0:2775x1850/924x0/smart/filters:strip_icc()/i.s3.glbimg.com/v1/AUTH_63b422c2caee4269b8b34177e8876b93/internal_photos/bs/2022/R/N/KYBjTgRyO1r8ibD8RmUA/c158e26e504b4ba88530ec867cb099f5-9624a.jpg", coalition: "Brasil da Esperança" },
-      { name: "Jair Bolsonaro", vice: "Braga Netto", party: "PL", number: "22", color: "#1e40af", ideology: "Direita", photo: "https://upload.wikimedia.org/wikipedia/commons/3/33/Jair_Bolsonaro_2022_%28cropped%29.jpg", coalition: "PL / PP / Republicanos / União Brasil / Progressistas" },
-      { name: "Simone Tebet", vice: "Mara Gabrilli", party: "MDB", number: "15", color: "#16a34a", ideology: "Centro", photo: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Simone_Tebet_2022.jpg/440px-Simone_Tebet_2022.jpg", coalition: "Pelo Brasil — MDB / PSDB / Cidadania" },
-      { name: "Ciro Gomes", vice: "Índio da Costa", party: "PDT", number: "12", color: "#f97316", ideology: "Centro-Esquerda", photo: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/Ciro_Gomes_2022_%28cropped%29.jpg/440px-Ciro_Gomes_2022_%28cropped%29.jpg", coalition: "PDT" },
+      { name: "Luiz Inácio Lula da Silva", vice: "Geraldo Alckmin", party: "PT", number: "13", color: "#dc2626", ideology: "Esquerda", photo: CANDIDATE_IMAGES.lula, vicePhoto: CANDIDATE_IMAGES.geraldoAlckmin, partyLogo: PARTY_LOGOS.pt, coalition: "Brasil da Esperança" },
+      { name: "Jair Bolsonaro", vice: "Braga Netto", party: "PL", number: "22", color: "#1e40af", ideology: "Direita", photo: CANDIDATE_IMAGES.jairBolsonaro, vicePhoto: CANDIDATE_IMAGES.bragaNetto, partyLogo: PARTY_LOGOS.pl, coalition: "PL / PP / Republicanos / União Brasil / Progressistas" },
+      { name: "Simone Tebet", vice: "Mara Gabrilli", party: "MDB", number: "15", color: "#16a34a", ideology: "Centro", photo: CANDIDATE_IMAGES.simoneTebet, vicePhoto: CANDIDATE_IMAGES.maraGabrilli, partyLogo: PARTY_LOGOS.mdb, coalition: "Pelo Brasil — MDB / PSDB / Cidadania" },
+      { name: "Ciro Gomes", vice: "Índio da Costa", party: "PDT", number: "12", color: "#f97316", ideology: "Centro-Esquerda", photo: CANDIDATE_IMAGES.ciroGomes, partyLogo: PARTY_LOGOS.pdt, coalition: "PDT" },
     ],
     results: {
       "AC": { 1: 22.5, 2: 64.2, 3: 3.2, 4: 2.1 },
@@ -271,3 +350,7 @@ export const POLITICAL_SCENARIOS: PoliticalScenario[] = [
   primeiroTurno2026Scenario,
   segundoTurno2026Scenario,
 ];
+
+export const POLITICAL_SCENARIOS: PoliticalScenario[] = RAW_POLITICAL_SCENARIOS.map(
+  withHistoricalAssets
+);
