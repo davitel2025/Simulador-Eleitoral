@@ -1,487 +1,280 @@
-# PROMPT COMPLETO — Modificações no Simulador Eleitoral
-
-**Copia e cola tudo abaixo na tua IA integrada ao Terminal:**
-
----
-
-## CONTEXTO
-
-Você vai trabalhar no projeto **Simulador Eleitoral** hospedado em `https://github.com/davitel2025/Simulador-Eleitoral`. É uma aplicação React + TypeScript + Vite + Tailwind CSS que simula eleições presidenciais brasileiras com mapa interativo, edição de votos por estado/município e geração de imagens de resultados.
-
-### Estrutura de Arquivos Relevante
-
-```
-src/
-├── App.tsx                                    # Componente raiz, gerencia fluxo de telas
-├── types.ts                                   # Tipos: Candidate, PoliticalScenario, ElectionRound, etc.
-├── data/
-│   ├── scenarios.ts                           # Cenários históricos (2018, 2022) e projeções 2026
-│   └── states.ts                              # Dados dos estados (UF, nome, eleitores, etc.)
-├── data_cenarios/
-│   ├── primeiro_turno_2026.json               # Dados JSON do 1º turno 2026
-│   └── segundo_turno_2026.json                # Dados JSON do 2º turno 2026
-├── lib/
-│   ├── constants.ts                           # DEFAULT_COLORS, UF_NAME_MAP, etc.
-│   ├── utils.ts                               # readFileAsBase64, normalizeVotesForCandidates, etc.
-│   ├── color.ts                               # Utilidades de cor
-│   └── geo.ts                                 # Projeções D3-geo
-├── components/
-│   ├── screens/
-│   │   ├── InitialScreen.tsx                  # Tela inicial (seleção de cenário, modo custom)
-│   │   ├── CandidateSetupScreen.tsx           # Tela de configuração de candidatos
-│   │   └── ElectionSimulator.tsx              # Simulador principal (~113KB, componente gigante)
-│   ├── CandidateManager.tsx                   # Gerenciador de candidatos dentro do simulador
-│   ├── modals/                                # Modais (estado, foto, município, etc.)
-│   └── photo/                                 # Componentes de geração de fotos
-```
-
-### Tipo `Candidate` (em `src/types.ts`):
-
-```typescript
-export interface Candidate {
-  id: CandidateId;
-  name: string;
-  vice: string;
-  party: string;
-  number: string;
-  color: string;
-  photo?: string;
-  vicePhoto?: string;
-  partyLogo?: string;
-  ideology?: string;
-  coalition?: string;
-  locked?: boolean;
-}
-```
-
-### Tipo `PoliticalScenario` (em `src/types.ts`):
-
-```typescript
-export interface PoliticalScenario {
-  id: string;
-  name: string;
-  year: number;
-  round?: ElectionRound;
-  description: string;
-  candidates: Omit<Candidate, 'id'>[];
-  results?: Record<string, Record<number, number>>;
-  customStates?: CustomStateInfo[];
-  nationalVoters?: number;
-  isCustom?: boolean;
-  generatedAt?: string;
-}
-```
-
-### Fluxo do App (`src/App.tsx`):
-
-1. Se `electionRound` é null → mostra `InitialScreen` (escolha de cenário)
-2. Se `setupComplete` é false → mostra `CandidateSetupScreen` (configurar candidatos)
-3. Se `setupComplete` é true → mostra `ElectionSimulator` (simulação)
-
-`InitialScreen` pode chamar `handleSelectScenario(scenario)` que já pula direto para o simulador com os candidatos do cenário pré-carregados. Quando o usuário escolhe criar do zero (modo custom ou seleciona turno manualmente), vai para `CandidateSetupScreen`.
-
----
-
-## TAREFA 1 — Criar Sistema de "Candidatos Prontos" (Preset Candidates)
-
-### O que fazer:
-
-No arquivo **`src/components/screens/CandidateSetupScreen.tsx`**, adicione uma nova aba chamada **"Candidatos Prontos"** (emoji: 📋) no array de tabs que já existe. Atualmente o arquivo tem:
-
-```typescript
-const tabs: { id: SetupTab; label: string; emoji: string }[] = [
-  { id: "candidatos", label: "Candidatos", emoji: "🗳️" },
-  { id: "ideologia", label: "Ideologia Política", emoji: "⚖️" },
-  { id: "coligacoes", label: "Coligações", emoji: "🤝" },
-];
-```
-
-Adicione o tipo `"presets"` ao tipo `SetupTab` e a nova tab:
-
-```typescript
-const tabs: { id: SetupTab; label: string; emoji: string }[] = [
-  { id: "presets", label: "Candidatos Prontos", emoji: "📋" },
-  { id: "candidatos", label: "Candidatos", emoji: "🗳️" },
-  { id: "ideologia", label: "Ideologia Política", emoji: "⚖️" },
-  { id: "coligacoes", label: "Coligações", emoji: "🤝" },
-];
-```
-
-### Como a aba "Candidatos Prontos" deve funcionar:
-
-1. **Criar um arquivo novo** `src/data/presetCandidates.ts` com um array exportado chamado `PRESET_CANDIDATES`. Cada item deve ter TODOS os campos de `Omit<Candidate, 'id'>` preenchidos (name, vice, party, number, color, photo, vicePhoto, partyLogo, ideology, coalition). Importe o tipo `Candidate` de `../types`.
-
-2. **Lista dos 15 candidatos prontos** com TODOS os dados abaixo. As fotos dos candidatos e logos dos partidos DEVEM usar URLs do Wikimedia Commons ou fontes confiáveis que funcionem. Use as URLs fornecidas abaixo e, para os que não têm URL fornecida, procure URLs adequadas no Wikimedia Commons. **É OBRIGATÓRIO que todos os links de foto e logo funcionem** — teste acessando no navegador.
-
-   **Candidato 1:**
-   - Nome: Lula
-   - Vice: Geraldo Alckmin
-   - Partido: PT
-   - Número: 13
-   - Ideologia: Centro-esquerda / esquerda
-   - Coligação: Brasil da Esperança
-   - Cor: `#dc2626` (vermelho)
-   - Foto: `https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Lula_-_foto_oficial_-_05_jan_2023_%28cropped%29.jpg/440px-Lula_-_foto_oficial_-_05_jan_2023_%28cropped%29.jpg`
-   - Foto Vice: `https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Geraldo_Alckmin_2022.jpg/440px-Geraldo_Alckmin_2022.jpg`
-   - Logo Partido: `https://upload.wikimedia.org/wikipedia/commons/b/b8/PT_%28Brazil%29_logo.svg`
-
-   **Candidato 2:**
-   - Nome: Jair Bolsonaro
-   - Vice: Braga Netto
-   - Partido: PL
-   - Número: 22
-   - Ideologia: Direita / direita conservadora
-   - Coligação: Pelo Bem do Brasil
-   - Cor: `#1e40af` (azul)
-   - Foto: `https://upload.wikimedia.org/wikipedia/commons/thumb/3/37/Jair_Bolsonaro_2019_Portrait_%283x4_cropped_center%29.jpg/960px-Jair_Bolsonaro_2019_Portrait_%283x4_cropped_center%29.jpg`
-   - Foto Vice: `https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/Braga_Netto_foto_oficial.jpg/440px-Braga_Netto_foto_oficial.jpg`
-   - Logo Partido: `https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Logo_do_Partido_Liberal_%28Brasil%29.svg/440px-Logo_do_Partido_Liberal_%28Brasil%29.svg`
-
-   **Candidato 3:**
-   - Nome: Simone Tebet
-   - Vice: Mara Gabrilli
-   - Partido: MDB
-   - Número: 15
-   - Ideologia: Centro
-   - Coligação: Brasil para Todos
-   - Cor: `#16a34a` (verde)
-   - Foto: `https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Simone_Tebet_2022.jpg/440px-Simone_Tebet_2022.jpg`
-   - Foto Vice: `https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Mara_Gabrilli.jpg/440px-Mara_Gabrilli.jpg`
-   - Logo Partido: `https://upload.wikimedia.org/wikipedia/commons/thumb/f/f7/MDB_logo_%282018%29.svg/440px-MDB_logo_%282018%29.svg`
-
-   **Candidato 4:**
-   - Nome: Ciro Gomes
-   - Vice: Ana Paula Matos
-   - Partido: PDT
-   - Número: 12
-   - Ideologia: Centro-esquerda
-   - Coligação: Sem coligação
-   - Cor: `#f97316` (laranja)
-   - Foto: `https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/Ciro_Gomes_2022_%28cropped%29.jpg/440px-Ciro_Gomes_2022_%28cropped%29.jpg`
-   - Foto Vice: Procurar foto de Ana Paula Matos no Wikimedia ou usar placeholder
-   - Logo Partido: `https://upload.wikimedia.org/wikipedia/commons/thumb/1/16/Logotipo_do_PDT.svg/440px-Logotipo_do_PDT.svg`
-
-   **Candidato 5:**
-   - Nome: Soraya Thronicke
-   - Vice: Marcos Cintra
-   - Partido: União Brasil
-   - Número: 44
-   - Ideologia: Centro-direita
-   - Coligação: Sem coligação
-   - Cor: `#0891b2` (ciano)
-   - Foto: `https://upload.wikimedia.org/wikipedia/commons/thumb/0/00/Soraya_Thronicke.jpg/440px-Soraya_Thronicke.jpg`
-   - Foto Vice: Procurar foto de Marcos Cintra no Wikimedia ou usar placeholder
-   - Logo Partido: `https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Logotipo_Uni%C3%A3o_Brasil.svg/440px-Logotipo_Uni%C3%A3o_Brasil.svg`
-
-   **Candidato 6:**
-   - Nome: Felipe d'Avila
-   - Vice: Tiago Mitraud
-   - Partido: Novo
-   - Número: 30
-   - Ideologia: Direita liberal
-   - Coligação: Sem coligação
-   - Cor: `#f59e0b` (amarelo/dourado)
-   - Foto: `https://upload.wikimedia.org/wikipedia/commons/thumb/7/78/Felipe_D%27Avila.jpg/440px-Felipe_D%27Avila.jpg`
-   - Foto Vice: Procurar foto de Tiago Mitraud no Wikimedia ou usar placeholder
-   - Logo Partido: `https://upload.wikimedia.org/wikipedia/commons/thumb/3/30/Logo_do_Novo_%28Brasil%29.svg/440px-Logo_do_Novo_%28Brasil%29.svg`
-
-   **Candidato 7:**
-   - Nome: Padre Kelmon
-   - Vice: Luiz Cláudio Gamonal
-   - Partido: PTB
-   - Número: 14
-   - Ideologia: Direita conservadora
-   - Coligação: Sem coligação
-   - Cor: `#7c3aed` (roxo)
-   - Foto: Procurar foto de Padre Kelmon no Wikimedia
-   - Foto Vice: Procurar foto ou usar placeholder
-   - Logo Partido: `https://upload.wikimedia.org/wikipedia/commons/thumb/a/a0/Logo_Partido_Trabalhista_Brasileiro_-_PTB.svg/440px-Logo_Partido_Trabalhista_Brasileiro_-_PTB.svg`
-
-   **Candidato 8:**
-   - Nome: Sofia Manzano
-   - Vice: Antonio Alves
-   - Partido: PCB
-   - Número: 21
-   - Ideologia: Esquerda comunista
-   - Coligação: Sem coligação
-   - Cor: `#b91c1c` (vermelho escuro)
-   - Foto: Procurar foto de Sofia Manzano no Wikimedia
-   - Foto Vice: Procurar foto ou usar placeholder
-   - Logo Partido: `https://upload.wikimedia.org/wikipedia/commons/thumb/0/04/Logo_do_PCB_%28Partido_Comunista_Brasileiro%29.svg/440px-Logo_do_PCB_%28Partido_Comunista_Brasileiro%29.svg`
-
-   **Candidato 9:**
-   - Nome: Luciano Huck
-   - Vice: vice a definir
-   - Partido: PSDB
-   - Número: 45
-   - Ideologia: Centro / centro-direita liberal
-   - Coligação: A definir
-   - Cor: `#3b82f6` (azul claro)
-   - Foto: `https://upload.wikimedia.org/wikipedia/commons/4/43/Luciano_Huck.jpg`
-   - Foto Vice: (vazio, vice a definir)
-   - Logo Partido: `https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/Logo_do_PSDB_%282018%29.svg/440px-Logo_do_PSDB_%282018%29.svg`
-
-   **Candidato 10:**
-   - Nome: Samara Martins
-   - Vice: vice a definir
-   - Partido: UP
-   - Número: 80
-   - Ideologia: Esquerda socialista
-   - Coligação: Sem coligação
-   - Cor: `#ec4899` (rosa)
-   - Foto: Procurar foto de Samara Martins no Wikimedia
-   - Foto Vice: (vazio, vice a definir)
-   - Logo Partido: `https://upload.wikimedia.org/wikipedia/commons/0/04/Unidade_Popular_Logo.svg`
-
-   **Candidato 11:**
-   - Nome: Renan Santos
-   - Vice: vice a definir
-   - Partido: Missão
-   - Número: 14
-   - Ideologia: Direita liberal / anti-PT e anti-bolsonarismo
-   - Coligação: A definir
-   - Cor: `#14b8a6` (teal)
-   - Foto: Procurar foto ou usar placeholder
-   - Foto Vice: (vazio, vice a definir)
-   - Logo Partido: `https://upload.wikimedia.org/wikipedia/pt/4/47/MISS%C3%83O_logo.png` (ou buscar logo do partido Missão)
-   - **NOTA IMPORTANTE:** O número do partido Missão pode ser diferente de 14. Verifique o número correto. Se for partido recém-criado, pode ser que ainda não tenha número definitivo. Use o número que for correto.
-
-   **Candidato 12:**
-   - Nome: Lula
-   - Vice: Geraldo Alckmin
-   - Partido: PT
-   - Número: 13
-   - Ideologia: Centro-esquerda / esquerda
-   - Coligação: A definir
-   - Cor: `#dc2626` (vermelho)
-   - Foto: mesma do candidato 1
-   - Foto Vice: mesma do candidato 1
-   - Logo Partido: mesma do candidato 1
-   - **NOTA:** Este é um cenário alternativo de Lula com coligação diferente (A definir).
-
-   **Candidato 13:**
-   - Nome: Flávio Bolsonaro
-   - Vice: vice a definir
-   - Partido: PL
-   - Número: 22
-   - Ideologia: Direita / bolsonarismo
-   - Coligação: A definir
-   - Cor: `#2563eb` (azul royal)
-   - Foto: `https://upload.wikimedia.org/wikipedia/commons/thumb/5/51/Fl%C3%A1vio_Bolsonaro_%28cropped%29.jpg/440px-Fl%C3%A1vio_Bolsonaro_%28cropped%29.jpg`
-   - Foto Vice: (vazio, vice a definir)
-   - Logo Partido: mesma do candidato 2
-
-   **Candidato 14:**
-   - Nome: Ronaldo Caiado
-   - Vice: vice a definir
-   - Partido: PSD
-   - Número: 55
-   - Ideologia: Centro-direita / direita
-   - Coligação: A definir
-   - Cor: `#ea580c` (laranja escuro)
-   - Foto: `https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Ronaldo_Caiado_%28foto_oficial%29.jpg/440px-Ronaldo_Caiado_%28foto_oficial%29.jpg`
-   - Foto Vice: (vazio, vice a definir)
-   - Logo Partido: `https://upload.wikimedia.org/wikipedia/commons/thumb/5/57/Logo_PSD_Brasil_%282023%29.svg/440px-Logo_PSD_Brasil_%282023%29.svg`
-
-   **Candidato 15:**
-   - Nome: Romeu Zema
-   - Vice: vice a definir
-   - Partido: Novo
-   - Número: 30
-   - Ideologia: Direita liberal
-   - Coligação: A definir
-   - Cor: `#eab308` (amarelo)
-   - Foto: `https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/Romeu_Zema_%28cropped%29.jpg/440px-Romeu_Zema_%28cropped%29.jpg`
-   - Foto Vice: (vazio, vice a definir)
-   - Logo Partido: mesma do candidato 6
-
-3. **Interface da aba "Candidatos Prontos":**
-
-   A aba deve funcionar como um **seletor de templates**. O usuário vê uma grade (grid) de cards com todos os candidatos prontos. Cada card mostra:
-   - Foto do candidato (redonda, com borda na cor do candidato)
-   - Nome do candidato
-   - Partido + número
-   - Ideologia
-   - Coligação
-   - Um checkbox/botão para selecionar/deselecionar aquele candidato
-
-   No topo da seção, deve ter:
-   - Um texto explicativo: "Selecione candidatos prontos para preencher automaticamente todas as informações. Os candidatos selecionados substituirão a lista atual."
-   - Um botão **"Aplicar Selecionados"** que:
-     1. Pega todos os candidatos marcados
-     2. Atribui IDs sequenciais (1, 2, 3...)
-     3. Substitui o array `candidates` do estado
-     4. Muda automaticamente para a aba "Candidatos" para que o usuário veja o resultado e possa editar
-
-   **Comportamento importante:**
-   - Se o usuário já tem candidatos preenchidos e clica em "Aplicar Selecionados", os candidatos atuais são SUBSTITUÍDOS pelos presets. Mostre um `confirm()` do JavaScript perguntando "Isso substituirá os candidatos atuais. Deseja continuar?"
-   - O campo `locked` do tipo `Candidate` pode ser usado para travar campos que vieram do preset (opcional, mas recomendado para indicar visualmente quais campos são de preset)
-   - As fotos dos candidatos e logos dos partidos devem ser URLs diretas, **não base64**, já que vêm de URLs externas (Wikimedia Commons)
-
-4. **Se o round for "segundo" (2º turno):**
-   - Mostrar um aviso na aba de presets: "No 2º turno, apenas 2 candidatos são permitidos. Selecione no máximo 2."
-   - Limitar a seleção a no máximo 2 candidatos
-   - Se tentar selecionar mais de 2, não permitir (desabilitar os outros checkboxes)
-
-5. **Importação no CandidateSetupScreen.tsx:**
-   - Importar `PRESET_CANDIDATES` de `../data/presetCandidates`
-   - Importar `useState` para gerenciar `selectedPresets: number[]` (array de índices selecionados)
-   - Implementar a lógica de seleção e aplicação descrita acima
-
----
-
-## TAREFA 2 — Corrigir Fotos e Logos nos Cenários Históricos
-
-### O que fazer:
-
-No arquivo **`src/data/scenarios.ts`**, os links de fotos de alguns candidatos nos cenários históricos estão quebrados. Substitua TODOS os links de `photo`, `vicePhoto` e adicione `partyLogo` em TODOS os cenários (2018 2º turno, 2022 2º turno, 2018 1º turno, 2022 1º turno). Use URLs do **Wikimedia Commons** que sejam confiáveis e funcionais.
-
-### URLs de referência para usar:
-
-**Fotos de candidatos:**
-
-| Pessoa | URL da Foto |
-|--------|-------------|
-| Jair Bolsonaro (2019+) | `https://upload.wikimedia.org/wikipedia/commons/thumb/3/37/Jair_Bolsonaro_2019_Portrait_%283x4_cropped_center%29.jpg/960px-Jair_Bolsonaro_2019_Portrait_%283x4_cropped_center%29.jpg` |
-| Jair Bolsonaro (2018 1º turno) | `https://upload.wikimedia.org/wikipedia/commons/d/d0/Jair_Bolsonaro_pela_EC_77_-M%C3%A9dico_Militar_no_SUS%28cropped%29.jpg` *(verificar se funciona, se não, usar a de 2019)* |
-| Fernando Haddad | `https://upload.wikimedia.org/wikipedia/commons/0/00/Fernando_Haddad.jpg` |
-| Lula (presidente) | `https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Lula_-_foto_oficial_-_05_jan_2023_%28cropped%29.jpg/440px-Lula_-_foto_oficial_-_05_jan_2023_%28cropped%29.jpg` |
-| Ciro Gomes | `https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/Ciro_Gomes_2022_%28cropped%29.jpg/440px-Ciro_Gomes_2022_%28cropped%29.jpg` |
-| Simone Tebet | `https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Simone_Tebet_2022.jpg/440px-Simone_Tebet_2022.jpg` |
-| Geraldo Alckmin | `https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Geraldo_Alckmin_2022.jpg/440px-Geraldo_Alckmin_2022.jpg` |
-| Hamilton Mourão | `https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/Mour%C3%A3o_foto_oficial_%28cropped%29.jpg/440px-Mour%C3%A3o_foto_oficial_%28cropped%29.jpg` |
-| Manuela D'Ávila | `https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/Manuela_d%27Avila_foto_oficial.jpg/440px-Manuela_d%27Avila_foto_oficial.jpg` |
-| Braga Netto | `https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/Braga_Netto_foto_oficial.jpg/440px-Braga_Netto_foto_oficial.jpg` |
-| João Amoêdo | `https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/Jo%C3%A3o_Amoedo_foto_oficial.jpg/440px-Jo%C3%A3o_Amoedo_foto_oficial.jpg` |
-| Mara Gabrilli | `https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Mara_Gabrilli.jpg/440px-Mara_Gabrilli.jpg` |
-
-**Logos dos partidos:**
-
-| Partido | URL do Logo |
-|---------|-------------|
-| PT | `https://upload.wikimedia.org/wikipedia/commons/b/b8/PT_%28Brazil%29_logo.svg` |
-| PSL | `https://upload.wikimedia.org/wikipedia/commons/c/c2/Partido_Social_Liberal_logo.svg` |
-| PL | `https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Logo_do_Partido_Liberal_%28Brasil%29.svg/440px-Logo_do_Partido_Liberal_%28Brasil%29.svg` |
-| PDT | `https://upload.wikimedia.org/wikipedia/commons/thumb/1/16/Logotipo_do_PDT.svg/440px-Logotipo_do_PDT.svg` |
-| PSDB | `https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/Logo_do_PSDB_%282018%29.svg/440px-Logo_do_PSDB_%282018%29.svg` |
-| NOVO | `https://upload.wikimedia.org/wikipedia/commons/thumb/3/30/Logo_do_Novo_%28Brasil%29.svg/440px-Logo_do_Novo_%28Brasil%29.svg` |
-| MDB | `https://upload.wikimedia.org/wikipedia/commons/thumb/f/f7/MDB_logo_%282018%29.svg/440px-MDB_logo_%282018%29.svg` |
-
-### Regras para correção:
-
-1. **Para CADA candidato em CADA cenário**, verifique se o `photo` funciona. Se não tiver certeza, substitua pela URL do Wikimedia correspondente.
-2. **Adicione `partyLogo`** em todos os candidatos dos cenários históricos — atualmente muitos não têm.
-3. **Corrija `vicePhoto`** onde estiver quebrado ou ausente.
-4. **A foto do Lula no cenário 2022** atualmente usa um link do `s2-valor.glbimg.com` que pode quebrar. Substitua pela URL do Wikimedia: `https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Lula_-_foto_oficial_-_05_jan_2023_%28cropped%29.jpg/440px-Lula_-_foto_oficial_-_05_jan_2023_%28cropped%29.jpg`
-5. **A foto do Haddad no cenário 2018** atualmente usa `fenajufe.org.br` que pode estar quebrado. Substitua por: `https://upload.wikimedia.org/wikipedia/commons/0/00/Fernando_Haddad.jpg`
-
----
-
-## TAREFA 3 — Melhorar a UI da Seleção de Candidatos (Criatividade)
-
-### O que fazer:
-
-Redesenhe a interface da aba "Candidatos" no `CandidateSetupScreen.tsx` e também a interface da nova aba "Candidatos Prontos". Seja **criativo** e **moderno**, mantendo o tema dark atual (bg-slate-950, borders white/10, etc.).
-
-### Sugestões de melhoria (implemente TODAS):
-
-1. **Cards de candidatos mais visuais:**
-   - Cada candidato deve ser exibido em um card com:
-     - A cor do candidato como **borda lateral esquerda grossa** (border-left: 4px solid {color})
-     - A foto do candidato (se existir) em um círculo grande (56x56 ou 64x64) no canto superior esquerdo do card
-     - O nome do candidato em texto grande e bold
-     - Partido e número em texto menor abaixo do nome
-     - Os campos de input organizados de forma mais compacta e limpa
-   - Se o candidato não tem foto, mostrar um **avatar placeholder** com as iniciais do nome em um círculo com a cor do candidato
-
-2. **Preview visual na aba de presets:**
-   - Os cards de candidatos prontos devem ser bonitos e informativos:
-     - Grid responsivo: `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4`
-     - Cada card com: foto redonda grande (80x80), nome, partido/número, ideologia como badge colorido, coligação em texto menor
-     - Hover com efeito de elevação (scale-[1.02] + shadow-xl)
-     - Checkbox estilizado no canto superior direito do card (custom checkbox com a cor do candidato quando selecionado)
-     - Quando selecionado, o card ganha uma borda brilhante na cor do candidato (ring-2 ring-offset-2 ring-offset-slate-950)
-     - Badge de ideologia com cores semânticas: esquerda → vermelho, centro-esquerda → laranja, centro → azul, centro-direita → ciano, direita → azul escuro, etc.
-
-3. **Upload de fotos melhorado:**
-   - Em vez dos botões "Upload" simples, mostrar áreas de drop com ícone de câmera/foto
-   - Quando a foto existe, mostrar com overlay de "X" para remover ao hover
-   - As três áreas (Foto, Foto Vice, Logo) devem estar lado a lado em linha com labels claros
-
-4. **Animações:**
-   - Usar Framer Motion (já instalado no projeto) para:
-     - Animação de entrada dos cards (stagger effect)
-     - Animação ao selecionar/deselecionar preset
-     - Animação suave ao adicionar/remover candidato
-   - Exemplo: `<motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }}>`
-
-5. **Layout geral:**
-   - Na aba "Candidatos", organizar os candidatos em vez de uma lista vertical simples, considerar um layout mais compacto
-   - Adicionar um **contador no topo**: "3 candidatos configurados" com o número em destaque
-   - O botão de adicionar candidato deve ser mais visual — talvez um card tracejado com "+" no final da lista de candidatos
-   - No topo da página de setup, manter o título "Configure os candidatos" mas adicionar um subtítulo explicativo
-
-6. **Cores semânticas para ideologia** (usar na aba de presets como badges):
-
-   ```
-   Esquerda comunista → bg-red-900/50 text-red-300
-   Esquerda socialista → bg-rose-900/50 text-rose-300
-   Esquerda → bg-red-800/50 text-red-200
-   Centro-esquerda → bg-orange-900/50 text-orange-300
-   Centro → bg-blue-900/50 text-blue-300
-   Centro-direita → bg-cyan-900/50 text-cyan-300
-   Direita → bg-blue-800/50 text-blue-200
-   Direita liberal → bg-sky-900/50 text-sky-300
-   Direita conservadora → bg-indigo-900/50 text-indigo-300
-   ```
-
-   Crie uma função helper `getIdeologyColor(ideology: string): { bg: string; text: string }` no arquivo de utils ou inline.
-
----
-
-## TAREFA 4 — Detalhes Técnicos e Consistência
-
-### Regras gerais:
-
-1. **NÃO quebre funcionalidade existente.** O simulador tem ~113KB de código em `ElectionSimulator.tsx` e diversos modais. Apenas modifique os arquivos listados acima.
-
-2. **TypeScript strict:** Mantenha todos os tipos corretos. Adicione o tipo `"presets"` ao `SetupTab` em `CandidateSetupScreen.tsx` (procure onde `SetupTab` é definido — provavelmente é um type union local como `type SetupTab = "candidatos" | "ideologia" | "coligacoes"`).
-
-3. **Performance:** As imagens dos presets vêm de URLs externas (Wikimedia). Isso é aceitável. Não tente converter para base64. O componente `CandidateThumb` no `InitialScreen.tsx` já tem tratamento de erro para imagens (`onError` → `setHasImageError(true)`), então se uma imagem falhar, o sistema já mostra fallback.
-
-4. **Responsividade:** Toda a UI nova deve ser responsiva. Use breakpoints do Tailwind (`sm:`, `md:`, `lg:`, `xl:`).
-
-5. **Consistência visual:** Mantenha o padrão dark do projeto:
-   - Backgrounds: `bg-slate-950`, `bg-slate-900/50`, `bg-slate-900/80`
-   - Borders: `border-white/10`, `border-white/20`
-   - Text: `text-white`, `text-slate-200`, `text-slate-300`, `text-slate-400`, `text-slate-500`
-   - Accent: `emerald-500` para ações positivas
-   - Red: `red-400`/`red-500` para ações destrutivas
-
-6. **Também adicione `partyLogo` aos presets:**
-   - Cada candidato preset deve ter o `partyLogo` preenchido com a URL SVG do logo do partido no Wikimedia Commons
-
-7. **Atualize também o `CandidateManager.tsx`** (usado dentro do simulador em `ElectionSimulator.tsx`) para:
-   - Mostrar o logo do partido ao lado do nome do candidato quando disponível
-   - Melhorar visualmente os cards de candidato (borda lateral colorida, foto maior)
-   - Mostrar a ideologia como badge colorido quando preenchida
-
-8. **No `InitialScreen.tsx`**, o componente `CandidateThumb` já mostra fotos dos candidatos nos cenários históricos. Após corrigir as URLs no `scenarios.ts`, verifique se o `CandidateThumb` renderiza corretamente. O componente atual usa `onError` para fallback — mantenha isso.
-
----
-
-## ORDEM DE EXECUÇÃO SUGERIDA
-
-1. Primeiro, crie o arquivo `src/data/presetCandidates.ts` com todos os 15 candidatos
-2. Depois, modifique `src/data/scenarios.ts` corrigindo TODAS as URLs de fotos e adicionando `partyLogo` em todos os cenários
-3. Depois, modifique `src/components/screens/CandidateSetupScreen.tsx` adicionando a aba de presets e melhorando a UI
-4. Por fim, melhore a UI do `src/components/CandidateManager.tsx`
-5. Teste executando `npm run dev` e verificando:
-   - A aba "Candidatos Prontos" aparece e funciona
-   - Selecionar presets e clicar "Aplicar" preenche os candidatos corretamente
-   - As fotos nos cenários históricos (2018, 2022) carregam sem erros no console
-   - A UI está bonita e responsiva
-
----
-
-**Não pule nenhum detalhe. Implemente TUDO o que foi descrito acima. O projeto usa React 19, TypeScript, Vite, Tailwind CSS 4 e Framer Motion.**
+CONTEXTO DO PROJETO:
+Você tem acesso ao repositório local do projeto "Simulador Eleitoral" (https://github.com/davitel2025/Simulador-Eleitoral), que é uma aplicação React + TypeScript + Vite que simula resultados de eleições presidenciais brasileiras. O projeto usa D3-geo para mapas, Framer Motion para animações e Tailwind CSS para estilo. Ele já possui:
+- Um mapa SVG interativo do Brasil dividido por estados (com GeoJSON do IBGE)
+- Sistema de "pintura" de municípios por estado individualmente (MunicipalityPaintModal.tsx)
+- Cenários históricos pré-definidos (historical scenarios) para eleições de 2018 e 2022
+- Exportação/importação de cenários em JSON
+- Geração de fotos/imagens (PNG) dos resultados nacionais, por estado e por região
+
+Leia e analise TODOS os arquivos do projeto antes de fazer qualquer modificação, especialmente:
+- src/components/screens/ElectionSimulator.tsx (arquivo principal, ~112KB — o maior do projeto)
+- src/components/screens/CandidateSetupScreen.tsx
+- src/components/modals/MunicipalityPaintModal.tsx
+- src/components/modals/NationalPhotoModal.tsx
+- src/components/modals/RegionalPhotoModal.tsx
+- src/components/photo/PhotoCards.tsx
+- src/data/ (todos os arquivos de dados, incluindo cenários históricos)
+- Qualquer arquivo de tipos TypeScript (types.ts ou similar) que defina as interfaces dos cenários
+
+===========================================================================
+TAREFA 1 — CORRIGIR OS DADOS DOS CENÁRIOS HISTÓRICOS (2018 e 2022)
+===========================================================================
+
+Localize onde os cenários históricos estão definidos no código (provavelmente em src/data/historicalScenarios.ts ou dentro de ElectionSimulator.tsx como um objeto/array). Corrija os dados com os valores REAIS do TSE descritos abaixo.
+
+--- ELEIÇÕES 2018 — 1º TURNO (dados oficiais TSE, votos válidos por estado) ---
+
+Candidatos: Jair Bolsonaro (PSL), Fernando Haddad (PT), Ciro Gomes (PDT), Geraldo Alckmin (PSDB)
+Cores sugeridas: Bolsonaro → #005a8e (azul), Haddad → #cc0000 (vermelho), Ciro → #ff7f00 (laranja), Alckmin → #0066cc (azul claro)
+
+Resultado nacional (votos válidos):
+- Bolsonaro: 46,03%
+- Haddad:    29,28%
+- Ciro:      12,47%
+- Alckmin:    4,76%
+- Outros:     7,46% (distribuídos entre os demais)
+
+Resultado por estado — porcentagens de votos válidos (apenas top candidatos, excluindo brancos/nulos):
+
+AC: Bolsonaro 62,24% | Haddad 18,53% | Ciro 5,17% | Outros 14,05%
+AL: Haddad 44,75%   | Bolsonaro 34,40% | Ciro 10,12% | Outros 10,72%
+AP: Bolsonaro 40,74% | Haddad 32,77% | Ciro 12,34% | Outros 14,17%
+AM: Bolsonaro 43,48% | Haddad 40,30% | Ciro 7,50% | Outros 8,73%
+BA: Haddad 60,28%   | Bolsonaro 23,41% | Ciro 9,41% | Outros 6,90%
+CE: Ciro 40,95%     | Haddad 33,12% | Bolsonaro 21,74% | Outros 4,19%
+DF: Bolsonaro 58,37% | Ciro 16,60% | Haddad 11,87% | Outros 13,16%
+ES: Bolsonaro 54,76% | Haddad 24,20% | Ciro 9,54% | Outros 11,49%
+GO: Bolsonaro 57,24% | Haddad 21,86% | Ciro 8,60% | Outros 12,30%
+MA: Haddad 61,26%   | Bolsonaro 24,28% | Ciro 8,39% | Outros 6,06%
+MT: Bolsonaro 60,04% | Haddad 24,76% | Ciro 5,59% | Outros 9,61%
+MS: Bolsonaro 55,06% | Haddad 23,87% | Ciro 8,04% | Outros 13,04%
+MG: Bolsonaro 48,31% | Haddad 27,65% | Ciro 11,64% | Outros 12,41%
+PA: Haddad 41,39%   | Bolsonaro 36,19% | Ciro 10,03% | Outros 12,37%
+PB: Haddad 45,46%   | Bolsonaro 31,30% | Ciro 16,75% | Outros 6,50%
+PR: Bolsonaro 56,89% | Haddad 19,70% | Ciro 8,31% | Outros 15,10%
+PE: Haddad 48,87%   | Bolsonaro 30,57% | Ciro 13,56% | Outros 7,00%
+PI: Haddad 63,40%   | Bolsonaro 18,76% | Ciro 11,42% | Outros 6,42%
+RJ: Bolsonaro 59,79% | Ciro 15,22% | Haddad 14,69% | Outros 10,30%
+RN: Haddad 41,19%   | Ciro 22,31% | Bolsonaro 30,21% | Outros 6,31%
+RS: Bolsonaro 52,63% | Haddad 22,81% | Ciro 11,37% | Outros 13,18%
+RO: Bolsonaro 62,24% | Haddad 20,36% | Ciro 6,03% | Outros 17,39%
+RR: Bolsonaro 62,97% | Haddad 17,85% | Ciro 5,36% | Outros 13,83%
+SC: Bolsonaro 65,82% | Haddad 15,13% | Ciro 6,68% | Outros 12,36%
+SP: Bolsonaro 53,00% | Haddad 16,42% | Ciro 11,35% | Outros 19,22%
+SE: Haddad 50,09%   | Bolsonaro 27,21% | Ciro 13,02% | Outros 9,67%
+TO: Bolsonaro 44,64% | Haddad 41,12% | Ciro 7,17% | Outros 7,07%
+
+ATENÇÃO: Para o cenário de 1º turno 2018, certifique-se de que a soma das porcentagens
+de todos os candidatos em cada estado não ultrapasse 100%. Se o sistema usa apenas
+os candidatos principais (Bolsonaro, Haddad, Ciro, Alckmin), normalize para que
+a soma seja 100%, mantendo as proporções relativas corretas do TSE.
+
+--- ELEIÇÕES 2022 — 2º TURNO (dados oficiais TSE por estado) ---
+
+Candidatos: Lula (PT) e Bolsonaro (PL)
+Cores: Lula → #cc0000 (vermelho), Bolsonaro → #005a8e (azul)
+
+Resultado por estado — porcentagens de votos válidos:
+
+AC:  Lula 29,70%  | Bolsonaro 70,30%  → VENCEDOR: Bolsonaro
+AL:  Lula 58,68%  | Bolsonaro 41,32%  → VENCEDOR: Lula
+AP:  Lula 48,64%  | Bolsonaro 51,36%  → VENCEDOR: Bolsonaro
+AM:  Lula 51,10%  | Bolsonaro 48,90%  → VENCEDOR: Lula
+BA:  Lula 72,12%  | Bolsonaro 27,88%  → VENCEDOR: Lula
+CE:  Lula 69,97%  | Bolsonaro 30,03%  → VENCEDOR: Lula
+DF:  Lula 41,19%  | Bolsonaro 58,81%  → VENCEDOR: Bolsonaro
+ES:  Lula 41,96%  | Bolsonaro 58,04%  → VENCEDOR: Bolsonaro
+GO:  Lula 41,29%  | Bolsonaro 58,71%  → VENCEDOR: Bolsonaro
+MA:  Lula 71,14%  | Bolsonaro 28,86%  → VENCEDOR: Lula
+MT:  Lula 34,92%  | Bolsonaro 65,08%  → VENCEDOR: Bolsonaro
+MS:  Lula 40,51%  | Bolsonaro 59,49%  → VENCEDOR: Bolsonaro
+MG:  Lula 50,20%  | Bolsonaro 49,80%  → VENCEDOR: Lula
+PA:  Lula 54,75%  | Bolsonaro 45,25%  → VENCEDOR: Lula
+PB:  Lula 66,62%  | Bolsonaro 33,38%  → VENCEDOR: Lula
+PR:  Lula 37,60%  | Bolsonaro 62,40%  → VENCEDOR: Bolsonaro
+PE:  Lula 66,93%  | Bolsonaro 33,07%  → VENCEDOR: Lula
+PI:  Lula 76,86%  | Bolsonaro 23,14%  → VENCEDOR: Lula
+RJ:  Lula 43,47%  | Bolsonaro 56,53%  → VENCEDOR: Bolsonaro
+RN:  Lula 65,10%  | Bolsonaro 34,90%  → VENCEDOR: Lula
+RS:  Lula 43,65%  | Bolsonaro 56,35%  → VENCEDOR: Bolsonaro
+RO:  Lula 29,34%  | Bolsonaro 70,66%  → VENCEDOR: Bolsonaro
+RR:  Lula 23,92%  | Bolsonaro 76,08%  → VENCEDOR: Bolsonaro
+SC:  Lula 30,73%  | Bolsonaro 69,27%  → VENCEDOR: Bolsonaro
+SP:  Lula 44,76%  | Bolsonaro 55,24%  → VENCEDOR: Bolsonaro
+SE:  Lula 67,54%  | Bolsonaro 32,46%  → VENCEDOR: Lula
+TO:  Lula 51,02%  | Bolsonaro 48,98%  → VENCEDOR: Lula
+
+Resultado nacional: Lula 50,90% | Bolsonaro 49,10%
+
+===========================================================================
+TAREFA 2 — ADICIONAR DADOS DE MUNICÍPIOS NO CENÁRIO HISTÓRICO 2022
+===========================================================================
+
+No cenário histórico do 2º turno de 2022, além dos dados por estado (Tarefa 1),
+adicione o resultado por MUNICÍPIO (quem venceu em cada um).
+
+IMPORTANTE — Como funciona o sistema atual de municípios:
+- O MunicipalityPaintModal.tsx já permite "pintar" municípios por candidato dentro de cada estado
+- Os municípios pintados ficam salvos na estrutura de dados do cenário (provavelmente como
+  um campo "municipalities" ou "municipalityData" dentro de cada estado no objeto do cenário)
+- Para o cenário histórico 2022, esse campo deve ser preenchido com os vencedores reais
+
+Resultado geral por município no 2º turno 2022:
+- Lula venceu em 3.123 municípios
+- Bolsonaro venceu em 2.444 municípios
+- Empate em 2 municípios (Guará/SP e Irati/SC — tratar como Bolsonaro ou empate conforme o sistema suportar)
+- Total: 5.570 municípios
+
+ESTRATÉGIA DE IMPLEMENTAÇÃO para os dados de municípios:
+Como não é viável hardcodar 5.570 municípios manualmente no código, adote a seguinte abordagem:
+
+OPÇÃO A (preferencial): Crie uma função utilitária que atribua o vencedor do município
+com base em heurística regional. Use os padrões reais conhecidos:
+
+Padrão geral por região:
+- NORDESTE: ~80-90% dos municípios para Lula. Exceções: capitais e cidades grandes podem variar.
+  Estados com maior domínio de Lula: PI (quase todos), MA, BA, CE, PE, PB, RN, SE, AL
+- NORTE: maioria dos municípios para Bolsonaro, exceto cidades grandes de AM, PA, TO
+  AC, RO, RR: esmagadora maioria Bolsonaro
+  AM: maioria Bolsonaro, mas Manaus e região oeste para Lula
+  PA: dividido — Lula venceu no estado, metade dos municípios para cada
+  TO: levemente Lula no estado (51%), municípios bem divididos
+- CENTRO-OESTE: esmagadora maioria para Bolsonaro em todos os estados (GO, MT, MS, DF)
+- SUDESTE:
+  SP: maioria dos municípios para Bolsonaro (interior), capital e Grande SP para Lula
+  MG: dividido quase 50/50 — sul/sudoeste/triângulo para Bolsonaro, norte/nordeste/BH para Lula
+  RJ: maioria dos municípios para Bolsonaro, exceto capital e Baixada Fluminense para Lula
+  ES: maioria para Bolsonaro
+- SUL: esmagadora maioria para Bolsonaro
+  PR, SC: quase todos os municípios para Bolsonaro
+  RS: maioria para Bolsonaro, exceto POA e região sul (fronteira) para Lula
+
+OPÇÃO B (alternativa): Se o sistema de municípios usa os códigos IBGE (geocódigo de 7 dígitos),
+crie uma fonte de dados externa ou um JSON estático em src/data/municipios2022.ts com
+os vencedores por código IBGE. Você pode gerar esse arquivo baseado na heurística acima,
+seguindo os padrões regionais reais.
+
+Se o projeto já tem um arquivo de dados geoespacial (GeoJSON) com os municípios, use os
+identificadores já presentes nele (id, properties.CD_MUN ou properties.GEOCODIGO, etc.)
+para criar o mapeamento vencedor → candidato.
+
+CAMPOS A PREENCHER POR MUNICÍPIO (no formato já usado pelo sistema):
+- Se o formato existente usa { municipioId: string, winner: CandidateId }, siga esse padrão
+- Se usa pinturas por cor ou index de candidato, siga o padrão já estabelecido
+- NÃO altere a estrutura de tipos já definida no projeto — apenas preencha os dados
+
+O candidato "Lula" no cenário histórico 2022 deve ter id correspondente ao candidato 1
+(verifique qual é o id correto no objeto do cenário já existente).
+O candidato "Bolsonaro" deve ter o id correspondente ao candidato 2.
+
+===========================================================================
+TAREFA 3 — MAPA NACIONAL POR MUNICÍPIO (nova funcionalidade)
+===========================================================================
+
+Atualmente, no mapa principal (ElectionSimulator.tsx), o Brasil é exibido com estados
+coloridos. Já existe a funcionalidade de "pintar municípios" dentro de cada estado
+individualmente (MunicipalityPaintModal.tsx). A nova funcionalidade pedida é:
+
+ADICIONAR UM BOTÃO/TOGGLE na interface do mapa principal (ElectionSimulator.tsx) que,
+quando ativado, substitui a visualização de estados coloridos por uma visualização de
+TODOS os municípios do Brasil coloridos simultaneamente no mapa nacional.
+
+Especificações técnicas:
+
+1. TOGGLE DE VISUALIZAÇÃO:
+   - Adicione um botão ou switch na barra de controles do mapa (mesma área onde ficam
+     os botões de zoom, legenda, etc.)
+   - Sugestão de label: "Por município" / "Por estado" (alternando)
+   - Ou use um ícone de mapa com tooltip explicativo
+   - O toggle deve ser visualmente consistente com o design existente (dark theme, bordas
+     arredondadas, estilo similar aos outros botões do projeto)
+
+2. CARREGAMENTO DO GEOJSON DE MUNICÍPIOS:
+   - O projeto provavelmente já carrega o GeoJSON de municípios via fetch assíncrono
+     para o MunicipalityPaintModal. Verifique como isso é feito.
+   - Reutilize a mesma fonte de dados de municípios, mas agora para renderizar todos
+     os estados ao mesmo tempo no mapa nacional.
+   - Se o GeoJSON de municípios for muito pesado para renderizar todos de uma vez,
+     implemente lazy loading: carregue os municípios apenas quando o toggle for ativado,
+     com um indicador de loading (spinner ou texto "Carregando municípios...").
+
+3. RENDERIZAÇÃO NO SVG PRINCIPAL:
+   - Quando o modo "por município" estiver ativo, substitua os paths dos estados pelos
+     paths dos municípios dentro do mesmo SVG viewBox já definido no mapa.
+   - Use a mesma projeção D3-geo já configurada no projeto.
+   - Cada município deve ser colorido com a cor do candidato que o venceu (usando
+     o campo municipalityData/municipalities do resultado de cada estado).
+   - Se um município não tiver resultado definido, use a cor neutra já usada para
+     estados sem resultado (cinza escuro ou a cor padrão do tema).
+   - Municípios sem dado devem ser transparentes ou cinza, igual ao comportamento
+     atual de estados não preenchidos.
+
+4. INTERATIVIDADE NO MODO MUNICÍPIO:
+   - Hover: ao passar o mouse sobre um município, exibir tooltip com:
+     * Nome do município
+     * Estado (UF)
+     * Candidato vencedor e porcentagem (se disponível)
+   - NÃO é necessário implementar clique para editar município no modo nacional
+     (manter o comportamento atual: para editar, o usuário vai no modal por estado)
+   - O zoom/pan já existente no mapa deve continuar funcionando normalmente
+
+5. PERFORMANCE:
+   - Se o GeoJSON de municípios for muito grande (pode ter milhares de paths SVG),
+     considere simplificar as geometrias com turf.js ou D3's simplify, OU renderize
+     apenas os municípios dos estados que já têm dados de municípios pintados.
+   - Adicione um aviso visual se a performance estiver comprometida (ex: "Modo município
+     pode ser lento em dispositivos mais simples").
+
+6. ESTADO DO TOGGLE:
+   - Persista o estado do toggle no estado local do componente (useState).
+   - NÃO é necessário persistir no localStorage ou no JSON do cenário.
+   - Quando o usuário alternar entre cenários, o toggle deve voltar para "por estado".
+
+===========================================================================
+INSTRUÇÕES GERAIS DE IMPLEMENTAÇÃO
+===========================================================================
+
+1. LEIA O CÓDIGO COMPLETO antes de modificar qualquer arquivo. O ElectionSimulator.tsx
+   tem ~112KB e contém a lógica central. Entenda os types/interfaces antes de mexer.
+
+2. PRESERVE A ARQUITETURA EXISTENTE:
+   - Não refatore funções que não estão sendo modificadas
+   - Mantenha o padrão de nomenclatura (camelCase, prefixo "handle" para handlers, etc.)
+   - Use os mesmos hooks e padrões de estado já usados no projeto
+   - Mantenha os imports organizados da forma que já estão
+
+3. TYPESCRIPT: Certifique-se de que todos os novos campos adicionados nas interfaces
+   de tipo sejam opcionais (?) para não quebrar cenários existentes sem esses dados.
+   Exemplo: municipalityWinners?: Record<string, CandidateId>
+
+4. BUILD E DEPLOY:
+   - Após as modificações, rode "npm run build" para gerar o dist/
+   - O projeto usa GitHub Pages servindo a pasta /docs — se houver um script de deploy
+     que copia dist/ para docs/, rode-o também
+   - Certifique-se de que não há erros de TypeScript (npx tsc --noEmit)
+
+5. ORDEM DE EXECUÇÃO RECOMENDADA:
+   a) Primeiro: leia todos os arquivos relevantes listados no início deste prompt
+   b) Segundo: corrija os dados históricos (Tarefa 1) — menor risco de quebrar coisas
+   c) Terceiro: adicione os dados de municípios no cenário 2022 (Tarefa 2)
+   d) Quarto: implemente o toggle de mapa por município (Tarefa 3 — maior complexidade)
+   e) Por fim: build e teste
+
+6. NÃO altere o sistema de geração de imagens (html2canvas/PhotoCards.tsx) sem
+   necessidade — apenas se a Tarefa 3 exigir que o modo município também apareça nas fotos.
+   Se quiser, pode deixar isso como opcional/futuro.
+
+7. Se encontrar que os cenários históricos estão definidos diretamente no código
+   (inline no componente), mova-os para um arquivo separado em src/data/ para
+   melhor organização — MAS apenas se isso não quebrar nada. Se estiver em arquivo
+   separado, modifique apenas esse arquivo.
+
+===========================================================================
+RESUMO DO QUE DEVE SER ENTREGUE:
+===========================================================================
+
+✅ Cenário histórico "1º Turno 2018" com as porcentagens corretas por estado (dados TSE reais)
+✅ Cenário histórico "2º Turno 2022" com as porcentagens corretas por estado (dados TSE reais)
+✅ Cenário histórico "2º Turno 2022" com os vencedores reais por município preenchidos
+✅ Toggle no mapa nacional para alternar entre visualização por estado e por município
+✅ Projeto buildando sem erros (npm run build) e sem erros TypeScript

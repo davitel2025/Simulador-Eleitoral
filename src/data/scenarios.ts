@@ -118,6 +118,50 @@ function withHistoricalAssets(scenario: PoliticalScenario): PoliticalScenario {
   };
 }
 
+function normalize2018FirstRoundState(
+  bolsonaro: number,
+  haddad: number,
+  ciro: number,
+  others: number
+): Record<number, number> {
+  const alckminFromOthers = others * (4.76 / 7.46);
+  const raw = { 1: bolsonaro, 2: haddad, 3: ciro, 4: alckminFromOthers };
+  const total = Object.values(raw).reduce((sum, value) => sum + value, 0);
+  return Object.fromEntries(
+    Object.entries(raw).map(([id, value]) => [Number(id), (value / total) * 100])
+  );
+}
+
+const HISTORICAL_2018_FIRST_ROUND_RESULTS: Record<string, Record<number, number>> = {
+  AC: normalize2018FirstRoundState(62.24, 18.53, 5.17, 14.05),
+  AL: normalize2018FirstRoundState(34.40, 44.75, 10.12, 10.72),
+  AP: normalize2018FirstRoundState(40.74, 32.77, 12.34, 14.17),
+  AM: normalize2018FirstRoundState(43.48, 40.30, 7.50, 8.73),
+  BA: normalize2018FirstRoundState(23.41, 60.28, 9.41, 6.90),
+  CE: normalize2018FirstRoundState(21.74, 33.12, 40.95, 4.19),
+  DF: normalize2018FirstRoundState(58.37, 11.87, 16.60, 13.16),
+  ES: normalize2018FirstRoundState(54.76, 24.20, 9.54, 11.49),
+  GO: normalize2018FirstRoundState(57.24, 21.86, 8.60, 12.30),
+  MA: normalize2018FirstRoundState(24.28, 61.26, 8.39, 6.06),
+  MT: normalize2018FirstRoundState(60.04, 24.76, 5.59, 9.61),
+  MS: normalize2018FirstRoundState(55.06, 23.87, 8.04, 13.04),
+  MG: normalize2018FirstRoundState(48.31, 27.65, 11.64, 12.41),
+  PA: normalize2018FirstRoundState(36.19, 41.39, 10.03, 12.37),
+  PB: normalize2018FirstRoundState(31.30, 45.46, 16.75, 6.50),
+  PR: normalize2018FirstRoundState(56.89, 19.70, 8.31, 15.10),
+  PE: normalize2018FirstRoundState(30.57, 48.87, 13.56, 7.00),
+  PI: normalize2018FirstRoundState(18.76, 63.40, 11.42, 6.42),
+  RJ: normalize2018FirstRoundState(59.79, 14.69, 15.22, 10.30),
+  RN: normalize2018FirstRoundState(30.21, 41.19, 22.31, 6.31),
+  RS: normalize2018FirstRoundState(52.63, 22.81, 11.37, 13.18),
+  RO: normalize2018FirstRoundState(62.24, 20.36, 6.03, 17.39),
+  RR: normalize2018FirstRoundState(62.97, 17.85, 5.36, 13.83),
+  SC: normalize2018FirstRoundState(65.82, 15.13, 6.68, 12.36),
+  SP: normalize2018FirstRoundState(53.00, 16.42, 11.35, 19.22),
+  SE: normalize2018FirstRoundState(27.21, 50.09, 13.02, 9.67),
+  TO: normalize2018FirstRoundState(44.64, 41.12, 7.17, 7.07),
+};
+
 // Dados oficiais TSE — 2º turno
 // 2018: Bolsonaro × Haddad — 104.820.213 votos válidos nacionais
 // 2022: Lula × Bolsonaro   — 118.228.673 votos válidos nacionais
@@ -153,7 +197,7 @@ const RAW_POLITICAL_SCENARIOS: PoliticalScenario[] = [
         vice: "Manuela D'Ávila",
         party: "PT",
         number: "13",
-        color: "#dc2626",
+        color: "#cc0000",
         ideology: "Esquerda",
         photo: CANDIDATE_IMAGES.fernandoHaddad,
         vicePhoto: CANDIDATE_IMAGES.manuelaDavila,
@@ -218,13 +262,14 @@ const RAW_POLITICAL_SCENARIOS: PoliticalScenario[] = [
         vice: "Braga Netto",
         party: "PL",
         number: "22",
-        color: "#1e40af",
+        color: "#005a8e",
         ideology: "Direita",
         photo: CANDIDATE_IMAGES.jairBolsonaro,
         vicePhoto: CANDIDATE_IMAGES.bragaNetto,
         partyLogo: PARTY_LOGOS.pl,
       },
     ],
+    municipalityResultStrategy: "tse-2022",
     // Porcentagens dos votos válidos — fonte TSE (2º turno 30/10/2022)
     results: {
       "AC": { 1: 29.70, 2: 70.30 },
@@ -251,9 +296,9 @@ const RAW_POLITICAL_SCENARIOS: PoliticalScenario[] = [
       "RR": { 1: 23.92, 2: 76.08 },
       "RS": { 1: 43.65, 2: 56.35 },
       "SC": { 1: 30.73, 2: 69.27 },
-      "SE": { 1: 67.21, 2: 32.79 },
+      "SE": { 1: 67.54, 2: 32.46 },
       "SP": { 1: 44.76, 2: 55.24 },
-      "TO": { 1: 51.36, 2: 48.64 },
+      "TO": { 1: 51.02, 2: 48.98 },
     },
   },
 
@@ -267,41 +312,12 @@ const RAW_POLITICAL_SCENARIOS: PoliticalScenario[] = [
     round: "primeiro",
     description: "Resultado do 1º turno de 2018 (Dados oficiais TSE — 7/10/2018)",
     candidates: [
-      { name: "Jair Bolsonaro", vice: "Hamilton Mourão", party: "PSL", number: "17", color: "#1e40af", ideology: "Direita", photo: CANDIDATE_IMAGES.jairBolsonaro2018, vicePhoto: CANDIDATE_IMAGES.hamiltonMourao, partyLogo: PARTY_LOGOS.psl, coalition: "Brasil Acima de Tudo, Deus Acima de Todos" },
-      { name: "Fernando Haddad", vice: "Manuela D'Ávila", party: "PT", number: "13", color: "#dc2626", ideology: "Esquerda", photo: CANDIDATE_IMAGES.fernandoHaddad, vicePhoto: CANDIDATE_IMAGES.manuelaDavila, partyLogo: PARTY_LOGOS.pt, coalition: "O Povo Feliz de Novo" },
-      { name: "Ciro Gomes", vice: "Kátia Abreu", party: "PDT", number: "12", color: "#f97316", ideology: "Centro-Esquerda", photo: CANDIDATE_IMAGES.ciroGomes, partyLogo: PARTY_LOGOS.pdt, coalition: "PDT / Solidariedade / Avante" },
-      { name: "Geraldo Alckmin", vice: "Ana Amélia Lemos", party: "PSDB", number: "45", color: "#3b82f6", ideology: "Centro", photo: CANDIDATE_IMAGES.geraldoAlckmin, partyLogo: PARTY_LOGOS.psdb, coalition: "União pelo Brasil" },
-      { name: "João Amoêdo", vice: "Christian Lohbauer", party: "NOVO", number: "30", color: "#f59e0b", ideology: "Direita Liberal", photo: CANDIDATE_IMAGES.joaoAmoedo, partyLogo: PARTY_LOGOS.novo, coalition: "" },
+      { name: "Jair Bolsonaro", vice: "Hamilton Mourão", party: "PSL", number: "17", color: "#005a8e", ideology: "Direita", photo: CANDIDATE_IMAGES.jairBolsonaro2018, vicePhoto: CANDIDATE_IMAGES.hamiltonMourao, partyLogo: PARTY_LOGOS.psl, coalition: "Brasil Acima de Tudo, Deus Acima de Todos" },
+      { name: "Fernando Haddad", vice: "Manuela D'Ávila", party: "PT", number: "13", color: "#cc0000", ideology: "Esquerda", photo: CANDIDATE_IMAGES.fernandoHaddad, vicePhoto: CANDIDATE_IMAGES.manuelaDavila, partyLogo: PARTY_LOGOS.pt, coalition: "O Povo Feliz de Novo" },
+      { name: "Ciro Gomes", vice: "Kátia Abreu", party: "PDT", number: "12", color: "#ff7f00", ideology: "Centro-Esquerda", photo: CANDIDATE_IMAGES.ciroGomes, partyLogo: PARTY_LOGOS.pdt, coalition: "PDT / Solidariedade / Avante" },
+      { name: "Geraldo Alckmin", vice: "Ana Amélia Lemos", party: "PSDB", number: "45", color: "#0066cc", ideology: "Centro", photo: CANDIDATE_IMAGES.geraldoAlckmin, partyLogo: PARTY_LOGOS.psdb, coalition: "União pelo Brasil" },
     ],
-    results: {
-      "AC": { 1: 61.38, 2: 17.28, 3: 9.42, 4: 6.11, 5: 2.01 },
-      "AL": { 1: 29.21, 2: 45.34, 3: 15.02, 4: 4.91, 5: 1.62 },
-      "AP": { 1: 36.05, 2: 40.0, 3: 13.18, 4: 4.31, 5: 1.88 },
-      "AM": { 1: 39.23, 2: 38.91, 3: 11.43, 4: 4.22, 5: 1.72 },
-      "BA": { 1: 19.88, 2: 57.4, 3: 13.74, 4: 3.81, 5: 1.38 },
-      "CE": { 1: 20.57, 2: 55.32, 3: 14.89, 4: 3.9, 5: 1.3 },
-      "DF": { 1: 54.2, 2: 20.01, 3: 9.34, 4: 8.11, 5: 4.23 },
-      "ES": { 1: 49.05, 2: 26.32, 3: 10.5, 4: 5.78, 5: 4.2 },
-      "GO": { 1: 51.22, 2: 23.03, 3: 11.18, 4: 5.72, 5: 3.91 },
-      "MA": { 1: 18.32, 2: 58.21, 3: 14.5, 4: 3.79, 5: 1.25 },
-      "MG": { 1: 44.32, 2: 30.12, 3: 12.01, 4: 5.44, 5: 2.87 },
-      "MS": { 1: 51.03, 2: 24.33, 3: 11.89, 4: 5.41, 5: 3.42 },
-      "MT": { 1: 52.41, 2: 22.89, 3: 11.11, 4: 5.5, 5: 3.33 },
-      "PA": { 1: 33.21, 2: 42.89, 3: 13.7, 4: 4.11, 5: 1.67 },
-      "PB": { 1: 24.5, 2: 51.3, 3: 14.2, 4: 4.17, 5: 1.41 },
-      "PE": { 1: 24.22, 2: 53.21, 3: 13.89, 4: 4.0, 5: 1.38 },
-      "PI": { 1: 16.11, 2: 62.35, 3: 13.88, 4: 3.4, 5: 1.1 },
-      "PR": { 1: 55.2, 2: 22.11, 3: 10.34, 4: 5.21, 5: 3.77 },
-      "RJ": { 1: 53.0, 2: 22.14, 3: 10.89, 4: 4.78, 5: 3.95 },
-      "RN": { 1: 25.3, 2: 51.0, 3: 14.1, 4: 4.0, 5: 1.4 },
-      "RO": { 1: 57.32, 2: 20.21, 3: 10.99, 4: 4.88, 5: 2.77 },
-      "RR": { 1: 55.41, 2: 21.22, 3: 11.89, 4: 5.02, 5: 2.8 },
-      "RS": { 1: 49.2, 2: 26.1, 3: 11.37, 4: 6.95, 5: 2.91 },
-      "SC": { 1: 65.82, 2: 15.13, 3: 6.68, 4: 5.41, 5: 3.88 },
-      "SE": { 1: 23.11, 2: 54.89, 3: 13.02, 4: 4.1, 5: 1.38 },
-      "SP": { 1: 53.0, 2: 16.42, 3: 11.35, 4: 9.22, 5: 5.43 },
-      "TO": { 1: 40.02, 2: 39.89, 3: 10.13, 4: 4.55, 5: 2.11 },
-    },
+    results: HISTORICAL_2018_FIRST_ROUND_RESULTS,
   },
 
   {

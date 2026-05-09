@@ -52,12 +52,14 @@ export interface PathData {
 
 export interface MunicipalityPath {
   code: string;
+  name: string;
   d: string;
 }
 
 export interface RegionalMunicipalityPath {
   uf: string;
   code: string;
+  name: string;
   d: string;
 }
 
@@ -77,6 +79,7 @@ export interface PoliticalScenario {
   results?: Record<string, Record<number, number>>;
   customStates?: CustomStateInfo[]; // para cenários personalizados
   nationalVoters?: number; // eleitorado nacional total (distribui proporcionalmente por estado)
+  municipalityResultStrategy?: "tse-2022";
   isCustom?: boolean;
   generatedAt?: string;
 }

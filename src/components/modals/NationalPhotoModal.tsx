@@ -33,6 +33,7 @@ interface NationalPhotoSettings {
   circleTopSize: number;
   circleBottomSize: number;
   portraitTopSize: number;
+  showMunicipalities: boolean;
   winnerBox: WinnerBoxConfig;
 }
 
@@ -99,6 +100,7 @@ export function NationalPhotoModal({
   candidateById,
   onClose,
   scenarioYear,
+  useOfficialMunicipalityResults,
 }: {
   candidates: Candidate[];
   national: any;
@@ -109,6 +111,7 @@ export function NationalPhotoModal({
   candidateById: Record<number, Candidate>;
   onClose: () => void;
   scenarioYear?: number;
+  useOfficialMunicipalityResults?: boolean;
 }) {
   const captureRef = useRef<HTMLDivElement>(null);
   const defaultSettings = useMemo<NationalPhotoSettings>(
@@ -120,6 +123,7 @@ export function NationalPhotoModal({
       circleTopSize: Math.round(150 * photoScale),
       circleBottomSize: Math.round(80 * photoScale),
       portraitTopSize: Math.round(150 * photoScale * 1.18),
+      showMunicipalities: false,
       winnerBox: DEFAULT_WINNER_BOX,
     }),
     [photoMapScale, photoScale]
@@ -137,6 +141,7 @@ export function NationalPhotoModal({
     circleTopSize,
     circleBottomSize,
     portraitTopSize,
+    showMunicipalities = false,
     winnerBox,
   } = settings;
   const updateSettings = (updates: Partial<NationalPhotoSettings>) => {
@@ -282,6 +287,27 @@ export function NationalPhotoModal({
               onChange={(localMapScale) => updateSettings({ localMapScale })}
             />
 
+            <div className="flex rounded-xl border border-white/10 bg-slate-900/80 p-1">
+              <button
+                type="button"
+                onClick={() => updateSettings({ showMunicipalities: false })}
+                className={`rounded-lg px-3 py-1 text-xs font-black transition-all ${
+                  !showMunicipalities ? "bg-cyan-600 text-white" : "text-slate-300"
+                }`}
+              >
+                Estados
+              </button>
+              <button
+                type="button"
+                onClick={() => updateSettings({ showMunicipalities: true })}
+                className={`rounded-lg px-3 py-1 text-xs font-black transition-all ${
+                  showMunicipalities ? "bg-cyan-600 text-white" : "text-slate-300"
+                }`}
+              >
+                Municípios
+              </button>
+            </div>
+
             <button
               type="button"
               onClick={handleResetDefaults}
@@ -348,6 +374,8 @@ export function NationalPhotoModal({
               results={results}
               candidateById={candidateById}
               mapSizePx={localMapScale}
+              showMunicipalities={showMunicipalities}
+              useOfficialMunicipalityResults={useOfficialMunicipalityResults}
             />
 
             {ranked.second && (

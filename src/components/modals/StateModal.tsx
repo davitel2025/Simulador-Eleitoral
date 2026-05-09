@@ -112,7 +112,7 @@ export function StateModal({
   const historyRef = useRef<Record<CandidateId, number>[]>([]);
   const lastSnapshotRef = useRef<Record<CandidateId, number>>(initialVotes);
   const skipHistoryRef = useRef(false);
-  const historyTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const historyTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {

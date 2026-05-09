@@ -6,24 +6,31 @@ import {
   useState,
   type ChangeEvent,
   type MouseEvent as ReactMouseEvent,
+  type Touch as ReactTouch,
   type TouchEvent as ReactTouchEvent,
 } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { REGIONS, STATES, STATE_BY_UF } from "../../data/states";
 import { STATE_GEO_URL, VIEWBOX_HEIGHT, VIEWBOX_WIDTH } from "../../lib/constants";
 import { getColorByWinnerPct, shadeHex } from "../../lib/color";
-import { buildStatePaths } from "../../lib/geo";
+import {
+  buildRegionalMunicipalityPaths,
+  buildStatePaths,
+  fetchMunicipalityGeo,
+} from "../../lib/geo";
 import {
   clamp,
   formatPct,
   getWinner,
   normalizeVotesForCandidates,
 } from "../../lib/utils";
+import { getMunicipalityResult2022 } from "../../data/municipalityResults2022";
 import type {
   Candidate,
   CandidateId,
   ElectionRound,
   PathData,
+  RegionalMunicipalityPath,
   RegionName,
   StateInfo,
   StateResult,
@@ -41,7 +48,13 @@ import { usePersistedState } from "../../hooks/usePersistedState";
 
 type AnalyticsTab = "regioes" | "desempenho" | "ranking" | "candidatos";
 type Point = { x: number; y: number };
-type MapTooltip = { uf: string; x: number; y: number };
+type MapTooltip = {
+  uf: string;
+  x: number;
+  y: number;
+  municipalityCode?: string;
+  municipalityName?: string;
+};
 type MapContextMenu = { uf: string; x: number; y: number } | null;
 type MapTheme = "dark" | "light";
 type PinchState = {
@@ -49,6 +62,10 @@ type PinchState = {
   midpoint: Point;
   zoom: number;
   offset: Point;
+};
+type MunicipalityDataByUf = {
+  municipalitiesByUf: Record<string, Record<string, Record<CandidateId, number>>>;
+  paintByUf: Record<string, Record<string, CandidateId>>;
 };
 
 const DEFAULT_PHOTO_SCALE = 1.45;
@@ -66,7 +83,7 @@ const REGION_BORDER_COLORS: Record<RegionName, string> = {
   Sul: "#ef4444",
 };
 
-function getTouchPoint(touch: Touch, rect: DOMRect): Point {
+function getTouchPoint(touch: ReactTouch, rect: DOMRect): Point {
   return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
 }
 
@@ -136,6 +153,10 @@ export function ElectionSimulator({
 }) {
   const [results, setResults] = useState<Record<string, StateResult>>({});
   const [paths, setPaths] = useState<PathData[]>([]);
+  const [municipalityPaths, setMunicipalityPaths] = useState<RegionalMunicipalityPath[]>([]);
+  const [mapMunicipalityMode, setMapMunicipalityMode] = useState(false);
+  const [municipalitiesLoading, setMunicipalitiesLoading] = useState(false);
+  const [municipalitiesLoadError, setMunicipalitiesLoadError] = useState(false);
   const [stateGeoData, setStateGeoData] = useState<any>(null);
   const [stateDialog, setStateDialog] = useState<{
     uf: string;
@@ -184,9 +205,9 @@ export function ElectionSimulator({
   const mapOffsetRef = useRef<Point>({ x: 0, y: 0 });
   const mapViewportRef = useRef({ width: 0, height: 0 });
   const pinchStateRef = useRef<PinchState | null>(null);
-  const mapTransitionTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
-  const highlightTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
-  const flashTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const mapTransitionTimeoutRef = useRef<number | null>(null);
+  const highlightTimeoutRef = useRef<number | null>(null);
+  const flashTimeoutRef = useRef<number | null>(null);
   const isDraggingRef = useRef(false);
   const lastMousePosRef = useRef({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -377,6 +398,86 @@ export function ElectionSimulator({
     });
   }, []);
 
+  const updateMunicipalityTooltip = useCallback((
+    pathItem: RegionalMunicipalityPath,
+    event: ReactMouseEvent<SVGPathElement>
+  ) => {
+    const rect = mapContainerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setMapTooltip({
+      uf: pathItem.uf,
+      municipalityCode: pathItem.code,
+      municipalityName: pathItem.name,
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    });
+  }, []);
+
+  const buildMunicipalityDataByUf = useCallback(
+    (items: RegionalMunicipalityPath[]) => {
+      const empty: MunicipalityDataByUf = { municipalitiesByUf: {}, paintByUf: {} };
+      if (loadedScenario?.municipalityResultStrategy !== "tse-2022") {
+        return empty;
+      }
+
+      const lulaCandidate =
+        candidates.find((candidate) => candidate.party.toUpperCase() === "PT" && candidate.number === "13") ??
+        candidates[0];
+      const bolsonaroCandidate =
+        candidates.find((candidate) => candidate.party.toUpperCase() === "PL" && candidate.number === "22") ??
+        candidates[1];
+      if (!lulaCandidate || !bolsonaroCandidate) return empty;
+
+      const municipalitiesByUf: Record<string, Record<string, Record<CandidateId, number>>> = {};
+      const paintByUf: Record<string, Record<string, CandidateId>> = {};
+
+      items.forEach((item) => {
+        const result = getMunicipalityResult2022(item.uf, item.name);
+        if (!result) return;
+        const total = result.lulaVotes + result.bolsonaroVotes;
+        if (total <= 0) return;
+        const municipalityVotes = {
+          [lulaCandidate.id]: (result.lulaVotes / total) * 100,
+          [bolsonaroCandidate.id]: (result.bolsonaroVotes / total) * 100,
+        };
+        const winner =
+          result.lulaVotes > result.bolsonaroVotes
+            ? lulaCandidate.id
+            : bolsonaroCandidate.id;
+        municipalitiesByUf[item.uf] = municipalitiesByUf[item.uf] ?? {};
+        municipalitiesByUf[item.uf][item.code] = municipalityVotes;
+        paintByUf[item.uf] = paintByUf[item.uf] ?? {};
+        paintByUf[item.uf][item.code] = winner;
+      });
+
+      return { municipalitiesByUf, paintByUf };
+    },
+    [candidates, loadedScenario?.municipalityResultStrategy]
+  );
+
+  const applyMunicipalityDataByUf = useCallback(
+    (items: RegionalMunicipalityPath[]) => {
+      const { municipalitiesByUf, paintByUf } = buildMunicipalityDataByUf(items);
+      if (Object.keys(paintByUf).length === 0) return;
+
+      setResults((prev) => {
+        const next = { ...prev };
+        Object.entries(paintByUf).forEach(([uf, municipalityPaint]) => {
+          const existing = next[uf];
+          if (!existing) return;
+          next[uf] = {
+            ...existing,
+            municipalities: municipalitiesByUf[uf] ?? {},
+            municipalityPaint,
+            usesMunicipalities: Object.keys(municipalityPaint).length > 0,
+          };
+        });
+        return next;
+      });
+    },
+    [buildMunicipalityDataByUf]
+  );
+
   useEffect(() => {
     mapZoomRef.current = mapZoom;
   }, [mapZoom]);
@@ -437,6 +538,7 @@ export function ElectionSimulator({
     if (!loadedScenario?.results) return;
     const candidateIds = candidates.map((c) => c.id);
     if (candidateIds.length === 0) return;
+    const { municipalitiesByUf, paintByUf } = buildMunicipalityDataByUf(municipalityPaths);
 
     const newResults: Record<string, StateResult> = {};
     for (const [uf, candidatePcts] of Object.entries(loadedScenario.results)) {
@@ -452,17 +554,71 @@ export function ElectionSimulator({
           votes[Number(id)] = (votes[Number(id)] / total) * 100;
         });
       }
+      const municipalities = municipalitiesByUf[uf] ?? {};
+      const municipalityPaint = paintByUf[uf] ?? {};
       newResults[uf] = {
         uf,
         votes,
         winner: getWinner(votes),
-        usesMunicipalities: false,
-        municipalities: {},
-        municipalityPaint: {},
+        usesMunicipalities: Object.keys(municipalityPaint).length > 0,
+        municipalities,
+        municipalityPaint,
       };
     }
     setResults(newResults);
-  }, [loadedScenario, candidates]);
+  }, [loadedScenario, candidates, municipalityPaths, buildMunicipalityDataByUf]);
+
+  useEffect(() => {
+    setMapMunicipalityMode(false);
+    setMunicipalityPaths([]);
+    setMunicipalitiesLoadError(false);
+    setMapTooltip(null);
+  }, [loadedScenario?.id]);
+
+  useEffect(() => {
+    if (!mapMunicipalityMode || municipalityPaths.length > 0) return;
+
+    let active = true;
+    setMunicipalitiesLoading(true);
+    setMunicipalitiesLoadError(false);
+
+    Promise.all(
+      activeStates.map(async (state) => {
+        const geo = await fetchMunicipalityGeo(state.ibgeCode);
+        return (geo?.features ?? []).map((feature: any) => ({
+          ...feature,
+          properties: {
+            ...(feature.properties ?? {}),
+            _uf: state.uf,
+          },
+        }));
+      })
+    )
+      .then((groups) => {
+        if (!active) return;
+        const features = groups.flat();
+        const nextPaths = buildRegionalMunicipalityPaths(features);
+        setMunicipalityPaths(nextPaths);
+        applyMunicipalityDataByUf(nextPaths);
+      })
+      .catch(() => {
+        if (!active) return;
+        setMunicipalitiesLoadError(true);
+      })
+      .finally(() => {
+        if (!active) return;
+        setMunicipalitiesLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    activeStates,
+    applyMunicipalityDataByUf,
+    mapMunicipalityMode,
+    municipalityPaths.length,
+  ]);
 
   // ── Carrega mapa GeoJSON ─────────────────────────────────────────────────
   useEffect(() => {
@@ -829,6 +985,25 @@ export function ElectionSimulator({
   const contextPathItem = contextMenu
     ? paths.find((item) => item.uf === contextMenu.uf)
     : undefined;
+  const activeMunicipalityPaths = useMemo(() => {
+    const activeUfs = new Set(activeStates.map((state) => state.uf));
+    return municipalityPaths.filter((item) => activeUfs.has(item.uf));
+  }, [activeStates, municipalityPaths]);
+  const hoveredMunicipalityWinnerId =
+    mapTooltip?.municipalityCode && mapTooltip.uf
+      ? results[mapTooltip.uf]?.municipalityPaint?.[mapTooltip.municipalityCode]
+      : null;
+  const hoveredMunicipalityWinner = hoveredMunicipalityWinnerId
+    ? candidateById[hoveredMunicipalityWinnerId]
+    : null;
+  const hoveredMunicipalityVotes =
+    mapTooltip?.municipalityCode && mapTooltip.uf
+      ? results[mapTooltip.uf]?.municipalities?.[mapTooltip.municipalityCode]
+      : undefined;
+  const hoveredMunicipalityWinnerPct =
+    hoveredMunicipalityWinnerId && hoveredMunicipalityVotes
+      ? hoveredMunicipalityVotes[hoveredMunicipalityWinnerId] || 0
+      : 0;
   const tooltipPlacement = mapTooltip
     ? {
         left:
@@ -1136,6 +1311,18 @@ export function ElectionSimulator({
             </button>
             <button
               type="button"
+              onClick={() => setMapMunicipalityMode((prev) => !prev)}
+              className={`rounded-xl border px-4 py-2.5 text-sm font-semibold shadow-lg transition-all ${
+                mapMunicipalityMode
+                  ? "border-cyan-300/60 bg-cyan-400/20 text-cyan-100"
+                  : "border-white/15 bg-slate-800/70 text-slate-200 hover:bg-slate-700"
+              }`}
+              title="Alternar mapa nacional entre estados e municípios"
+            >
+              {mapMunicipalityMode ? "Por estado" : "Por município"}
+            </button>
+            <button
+              type="button"
               onClick={handleExport}
               className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-300 shadow-lg transition-all hover:bg-emerald-500/20"
             >
@@ -1407,43 +1594,10 @@ export function ElectionSimulator({
               </button>
             </div>
 
-            {false && hoveredStateInfo && hoveredResult && (
-              <motion.div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
-                    {hoveredStateInfo.name}
-                  </div>
-                  <div className="rounded-lg bg-white/10 px-2 py-0.5 text-xs font-bold text-white">
-                    {hoveredStateInfo.uf}
-                  </div>
-                </div>
-                {Object.entries(hoveredResult.votes).map(([candidateId, pct]) => {
-                  const candidate = candidateById[Number(candidateId)];
-                  if (!candidate) return null;
-                  return (
-                    <div
-                      key={candidateId}
-                      className="flex items-center justify-between text-sm py-1"
-                    >
-                      <span className="font-semibold" style={{ color: candidate.color }}>
-                        {candidate.name}
-                      </span>
-                      <span className="font-black text-white">{formatPct(pct)}</span>
-                    </div>
-                  );
-                })}
-                {hoveredResult.excluded && (
-                  <div className="mt-2 text-xs font-black text-red-400 border border-red-400/30 rounded px-2 py-1">
-                    Excluído da contagem nacional
-                  </div>
-                )}
-              </motion.div>
-            )}
-
             <AnimatePresence>
               {hoveredStateInfo && mapTooltip && (
                 <motion.div
-                  key={hoveredStateInfo.uf}
+                  key={`${hoveredStateInfo.uf}-${mapTooltip.municipalityCode ?? "state"}`}
                   initial={{ opacity: 0, y: -6, scale: 0.96 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -4, scale: 0.96 }}
@@ -1463,10 +1617,14 @@ export function ElectionSimulator({
                       />
                       <div className="min-w-0">
                       <div className="text-sm font-black text-white">
-                        {hoveredStateInfo.name} ({hoveredStateInfo.uf})
+                        {mapTooltip.municipalityCode
+                          ? mapTooltip.municipalityName
+                          : `${hoveredStateInfo.name} (${hoveredStateInfo.uf})`}
                       </div>
                       <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">
-                        {hoveredStateInfo.region}
+                        {mapTooltip.municipalityCode
+                          ? `${hoveredStateInfo.name} - ${hoveredStateInfo.uf}`
+                          : hoveredStateInfo.region}
                       </div>
                       </div>
                     </div>
@@ -1475,9 +1633,38 @@ export function ElectionSimulator({
                     </div>
                   </div>
                   <div className="mb-3 text-xs font-semibold text-slate-300">
-                    {getVotersForState(hoveredStateInfo, loadedScenario).toLocaleString("pt-BR")} eleitores
+                    {mapTooltip.municipalityCode
+                      ? "Resultado municipal oficial TSE 2022"
+                      : `${getVotersForState(hoveredStateInfo, loadedScenario).toLocaleString("pt-BR")} eleitores`}
                   </div>
-                  {hoveredResult?.winner && hoveredWinner ? (
+                  {mapTooltip.municipalityCode ? (
+                    hoveredMunicipalityWinner ? (
+                      <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                        <div className="mb-2 flex items-center gap-2">
+                          <span
+                            className="h-3 w-3 rounded-sm"
+                            style={{ backgroundColor: hoveredMunicipalityWinner.color }}
+                          />
+                          <span className="text-xs font-black text-white">
+                            Vencedor: {hoveredMunicipalityWinner.name} ({hoveredMunicipalityWinner.party})
+                          </span>
+                        </div>
+                        <div
+                          className="text-2xl font-black"
+                          style={{ color: hoveredMunicipalityWinner.color }}
+                        >
+                          {formatPct(hoveredMunicipalityWinnerPct)}
+                        </div>
+                        <div className="mt-1 text-[11px] font-bold text-slate-400">
+                          Percentual dos votos válidos no município
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-slate-600/60 bg-slate-800/60 px-3 py-2 text-xs font-bold text-slate-300">
+                        Sem vencedor municipal definido
+                      </div>
+                    )
+                  ) : hoveredResult?.winner && hoveredWinner ? (
                     <div className="rounded-lg border border-white/10 bg-white/5 p-3">
                       <div className="mb-2 flex items-center gap-2">
                         <span
@@ -1652,7 +1839,39 @@ export function ElectionSimulator({
                     </defs>
                     <rect width={VIEWBOX_WIDTH} height={VIEWBOX_HEIGHT} fill="url(#mapOceanGradient)" />
                     <rect width={VIEWBOX_WIDTH} height={VIEWBOX_HEIGHT} fill="url(#mapGridPattern)" />
-                    {paths.map((pathItem) => {
+                    {mapMunicipalityMode ? activeMunicipalityPaths.map((pathItem) => {
+                      const result = results[pathItem.uf];
+                      const winnerId = result?.municipalityPaint?.[pathItem.code] ?? null;
+                      const winner = winnerId ? candidateById[winnerId] : null;
+                      const stateInfo = STATE_BY_UF[pathItem.uf];
+                      return (
+                        <path
+                          key={`${pathItem.uf}-${pathItem.code}`}
+                          d={pathItem.d}
+                          fill={winner ? winner.color : mapTheme === "light" ? "#e2e8f0" : "#1e293b"}
+                          stroke={mapTheme === "light" ? "#94a3b8" : "#0f172a"}
+                          strokeWidth={0.25 / mapZoom}
+                          className="pointer-events-auto cursor-crosshair transition-colors duration-150 hover:brightness-125"
+                          style={{
+                            opacity:
+                              highlightCandidate && winnerId !== highlightCandidate
+                                ? 0.35
+                                : stateInfo
+                                  ? 0.96
+                                  : 0.3,
+                          }}
+                          onMouseEnter={(event) => {
+                            setHoveredState(pathItem.uf);
+                            updateMunicipalityTooltip(pathItem, event);
+                          }}
+                          onMouseMove={(event) => updateMunicipalityTooltip(pathItem, event)}
+                          onMouseLeave={() => {
+                            setHoveredState(null);
+                            setMapTooltip(null);
+                          }}
+                        />
+                      );
+                    }) : paths.map((pathItem) => {
                       const isHovered = hoveredState === pathItem.uf;
                       const result = results[pathItem.uf];
                       const winnerColor = result?.winner
@@ -1805,33 +2024,19 @@ export function ElectionSimulator({
                               </text>
                             </g>
                           )}
-                          {isActive && result?.usesMunicipalities && (
-                            <g className="pointer-events-none">
-                              <rect
-                                x={pathItem.centroid[0] - 21}
-                                y={pathItem.centroid[1] + 13}
-                                width={16}
-                                height={16}
-                                rx={4}
-                                fill="#0f172a"
-                                stroke="#38bdf8"
-                                strokeWidth={1 / mapZoom}
-                              />
-                              <text
-                                x={pathItem.centroid[0] - 13}
-                                y={pathItem.centroid[1] + 25}
-                                textAnchor="middle"
-                                className="fill-sky-300 text-[10px] font-black"
-                              >
-                                M
-                              </text>
-                            </g>
-                          )}
                         </g>
                       );
                     })}
                   </svg>
                 </motion.div>
+              </div>
+            )}
+
+            {mapMunicipalityMode && (municipalitiesLoading || municipalitiesLoadError) && (
+              <div className="absolute left-1/2 top-24 z-30 -translate-x-1/2 rounded-xl border border-white/15 bg-slate-950/90 px-4 py-3 text-sm font-bold text-slate-200 shadow-2xl backdrop-blur-md">
+                {municipalitiesLoading
+                  ? "Carregando municípios..."
+                  : "Não foi possível carregar os municípios."}
               </div>
             )}
 
@@ -1858,6 +2063,9 @@ export function ElectionSimulator({
                       <span>Sem resultado</span>
                     </div>
                     <div className="mt-2 border-t border-white/10 pt-2 text-[10px] font-bold text-slate-400">
+                      {mapMunicipalityMode
+                        ? "Modo município pode exigir mais desempenho em dispositivos simples."
+                        : null}
                       <div className="mb-1">Intensidade da vitÃ³ria</div>
                       <div className="h-2 w-32 rounded-full bg-gradient-to-r from-white/80 via-slate-400 to-slate-900" />
                       <div className="mt-1 flex w-32 justify-between">
@@ -2498,6 +2706,7 @@ export function ElectionSimulator({
             candidateById={candidateById}
             onClose={() => setNationalPhotoOpen(false)}
             scenarioYear={scenarioYear}
+            useOfficialMunicipalityResults={loadedScenario?.municipalityResultStrategy === "tse-2022"}
           />
         )}
       </AnimatePresence>
@@ -2516,6 +2725,7 @@ export function ElectionSimulator({
             candidateById={candidateById}
             onClose={() => setRegionalPhotoOpen(false)}
             scenarioYear={scenarioYear}
+            useOfficialMunicipalityResults={loadedScenario?.municipalityResultStrategy === "tse-2022"}
           />
         )}
       </AnimatePresence>

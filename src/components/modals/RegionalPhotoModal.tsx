@@ -40,7 +40,7 @@ interface RegionalPhotoSettings {
   winnerBox: WinnerBoxConfig;
 }
 
-export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, stateGeoData, results, photoScale, photoMapScale, candidateById, onClose, scenarioYear }: {
+export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, stateGeoData, results, photoScale, photoMapScale, candidateById, onClose, scenarioYear, useOfficialMunicipalityResults }: {
   region: RegionName;
   onRegionChange: (region: RegionName) => void;
   candidates: Candidate[];
@@ -52,6 +52,7 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
   candidateById: Record<number, Candidate>;
   onClose: () => void;
   scenarioYear?: number;
+  useOfficialMunicipalityResults?: boolean;
 }) {
   const captureRef = useRef<HTMLDivElement>(null);
   const defaultSettings = useMemo<RegionalPhotoSettings>(
@@ -272,7 +273,13 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
               </div>
             )}
             {showMunicipalities ? (
-              <RegionalMunicipalityMapCenter region={region} results={results} candidateById={candidateById} mapSizePx={localMapScale} />
+              <RegionalMunicipalityMapCenter
+                region={region}
+                results={results}
+                candidateById={candidateById}
+                mapSizePx={localMapScale}
+                useOfficialMunicipalityResults={useOfficialMunicipalityResults}
+              />
             ) : (
               <RegionalMapCenter regionPaths={mapPaths} results={results} candidateById={candidateById} mapSizePx={localMapScale} />
             )}
