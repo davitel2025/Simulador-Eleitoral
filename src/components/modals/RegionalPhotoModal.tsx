@@ -20,7 +20,7 @@ import {
   type WinnerBoxConfig,
 } from "../photo/PhotoCards";
 import { RegionalMapCenter, RegionalMunicipalityMapCenter } from "../photo/MapCenters";
-import type { Candidate, CandidateId, HistoricalMunicipalityScenarioKey, PathData, RegionName, StateResult } from "../../types";
+import type { Candidate, CandidateId, HistoricalMunicipalityScenarioKey, MunicipalityMapStyle, PathData, RegionName, StateResult } from "../../types";
 import {
   clearPersistedStateByPrefix,
   usePersistedState,
@@ -31,12 +31,16 @@ const REGIONAL_PHOTO_PREFIX = "eleitoral_rfoto_";
 interface RegionalPhotoSettings {
   localMapScale: number;
   showMunicipalities: boolean;
+  shadeByWinMargin: boolean;
   bgValue: string;
   bgImage?: string;
   cardShape: PhotoCardShape;
   circleTopSize: number;
   circleBottomSize: number;
   portraitTopSize: number;
+  fontSizeBase: number;
+  fontColor: string;
+  useCandidateFontColor: boolean;
   winnerBox: WinnerBoxConfig;
 }
 
@@ -59,12 +63,16 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
     () => ({
       localMapScale: photoMapScale,
       showMunicipalities: false,
+      shadeByWinMargin: true,
       bgValue: "#0f172a",
       bgImage: undefined,
       cardShape: "circle",
       circleTopSize: Math.round(150 * photoScale),
       circleBottomSize: Math.round(80 * photoScale),
       portraitTopSize: Math.round(150 * photoScale * 1.18),
+      fontSizeBase: 14,
+      fontColor: "#ffffff",
+      useCandidateFontColor: false,
       winnerBox: DEFAULT_WINNER_BOX,
     }),
     [photoMapScale, photoScale]
@@ -77,14 +85,20 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
   const {
     localMapScale,
     showMunicipalities,
+    shadeByWinMargin = true,
     bgValue,
     bgImage,
     cardShape,
     circleTopSize,
     circleBottomSize,
     portraitTopSize,
+    fontSizeBase = 14,
+    fontColor = "#ffffff",
+    useCandidateFontColor = false,
     winnerBox,
   } = settings;
+  const [municipalityMapStyle, setMunicipalityMapStyle] =
+    usePersistedState<MunicipalityMapStyle>("municipalityMapStyle", "original");
   const updateSettings = (updates: Partial<RegionalPhotoSettings>) => {
     setSettings((previous) => ({ ...previous, ...updates }));
   };
@@ -188,6 +202,33 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
                 Por município
               </button>
             </div>
+            {showMunicipalities && (
+                <button
+                  type="button"
+                  onClick={() => updateSettings({ shadeByWinMargin: !shadeByWinMargin })}
+                  className={`rounded-xl border px-3 py-2 text-xs font-black transition-all ${
+                    shadeByWinMargin ? "border-emerald-400/60 bg-emerald-500/15 text-emerald-200" : "border-slate-600 bg-slate-900/80 text-slate-300"
+                  }`}
+                >
+                  Estratificar por intensidade
+                </button>
+            )}
+            <div className="flex rounded-xl border border-white/10 bg-slate-900/80 p-1">
+              <button
+                type="button"
+                onClick={() => setMunicipalityMapStyle("original")}
+                className={`rounded-lg px-3 py-1 text-xs font-black ${municipalityMapStyle === "original" ? "bg-violet-600 text-white" : "text-slate-300"}`}
+              >
+                Original
+              </button>
+              <button
+                type="button"
+                onClick={() => setMunicipalityMapStyle("broadcast")}
+                className={`rounded-lg px-3 py-1 text-xs font-black ${municipalityMapStyle === "broadcast" ? "bg-violet-600 text-white" : "text-slate-300"}`}
+              >
+                Broadcast
+              </button>
+            </div>
             <AvatarSizeControls
               circleSize={circleTopSize}
               portraitSize={portraitTopSize}
@@ -227,6 +268,38 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
               value={localMapScale}
               onChange={(localMapScale) => updateSettings({ localMapScale })}
             />
+            <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2">
+              <span className="text-xs font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Fonte</span>
+              <input
+                type="range"
+                min={8}
+                max={32}
+                step={1}
+                value={fontSizeBase}
+                onChange={(e) => updateSettings({ fontSizeBase: Number(e.target.value) })}
+                className="h-2 w-20 appearance-none rounded-full bg-slate-700 accent-violet-500"
+              />
+              <span className="w-9 text-right text-xs font-bold text-slate-400">{fontSizeBase}px</span>
+            </div>
+            <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-xs font-black uppercase tracking-widest text-slate-400">
+              Cor texto
+              <input
+                type="color"
+                value={fontColor}
+                onChange={(e) => updateSettings({ fontColor: e.target.value })}
+                className="h-6 w-6 cursor-pointer rounded border border-slate-600"
+                style={{ padding: "1px" }}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => updateSettings({ useCandidateFontColor: !useCandidateFontColor })}
+              className={`rounded-xl border px-3 py-2 text-xs font-black transition-all ${
+                useCandidateFontColor ? "border-amber-300/60 bg-amber-400/20 text-amber-100" : "border-white/10 bg-slate-900/80 text-slate-300"
+              }`}
+            >
+              Cor dos candidatos
+            </button>
             <button
               type="button"
               onClick={handleResetDefaults}
@@ -248,8 +321,11 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
           </div>
         </div>
 
-        <div ref={captureRef} className="rounded-[50px] border border-white/10 p-12 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.7)]"
-          style={bgStyle}>
+        <div
+          ref={captureRef}
+          className="rounded-[50px] border border-white/10 p-12 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.7)]"
+          style={bgStyle}
+        >
           <div className="mb-6 text-center">
             <div className="text-[11px] font-black uppercase tracking-[0.6em] text-slate-500">
               Eleição {scenarioYear ?? 2026} — Resultado Regional
@@ -269,6 +345,9 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
                   shape={cardShape}
                   frameConfig={winnerBox}
                   frameSurfaceColor={frameSurfaceColor}
+                  fontSizeBase={fontSizeBase}
+                  fontColor={fontColor}
+                  useCandidateFontColor={useCandidateFontColor}
                 />
               </div>
             )}
@@ -279,7 +358,8 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
                 candidateById={candidateById}
                 mapSizePx={localMapScale}
                 municipalityScenarioKey={municipalityScenarioKey}
-                shadeMunicipalitiesByPct={true}
+                shadeMunicipalitiesByPct={shadeByWinMargin}
+                municipalityMapStyle={municipalityMapStyle}
               />
             ) : (
               <RegionalMapCenter regionPaths={mapPaths} results={results} candidateById={candidateById} mapSizePx={localMapScale} />
@@ -296,6 +376,9 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
                   shape={cardShape}
                   frameConfig={winnerBox}
                   frameSurfaceColor={frameSurfaceColor}
+                  fontSizeBase={fontSizeBase}
+                  fontColor={fontColor}
+                  useCandidateFontColor={useCandidateFontColor}
                 />
               </div>
             )}
@@ -305,9 +388,9 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
             <div className="flex justify-center mb-8">
               <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${ranked.bottom3.length + (ranked.hasOthers ? 1 : 0)}, minmax(0, 200px))` }}>
                 {ranked.bottom3.map((item) => (
-                  <BottomCandidateCard key={item.candidate.id} item={item} avatarPx={circleBottomSize} showVotes={true} />
+                  <BottomCandidateCard key={item.candidate.id} item={item} avatarPx={circleBottomSize} showVotes={true} fontSizeBase={fontSizeBase} fontColor={fontColor} useCandidateFontColor={useCandidateFontColor} />
                 ))}
-                {ranked.hasOthers && <OthersCard othersPct={ranked.othersPct} othersVotes={ranked.othersVotes} avatarPx={circleBottomSize} showVotes={true} />}
+                {ranked.hasOthers && <OthersCard othersPct={ranked.othersPct} othersVotes={ranked.othersVotes} avatarPx={circleBottomSize} showVotes={true} fontSizeBase={fontSizeBase} fontColor={fontColor} />}
               </div>
             </div>
           )}

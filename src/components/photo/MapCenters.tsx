@@ -5,7 +5,7 @@ import {
   getHistoricalWinnerCandidateId,
 } from "../../data/historicalElectionResults";
 import { VIEWBOX_HEIGHT, VIEWBOX_WIDTH } from "../../lib/constants";
-import { getColorByWinnerPct, shadeHex } from "../../lib/color";
+import { getColorByWinnerPct, getMunicipalityFillColor, shadeHex } from "../../lib/color";
 import {
   buildMunicipalityPaths,
   buildRegionalMunicipalityPaths,
@@ -15,6 +15,7 @@ import type {
   Candidate,
   CandidateId,
   HistoricalMunicipalityScenarioKey,
+  MunicipalityMapStyle,
   MunicipalityPath,
   PathData,
   RegionName,
@@ -22,6 +23,24 @@ import type {
   StateInfo,
   StateResult,
 } from "../../types";
+
+function MunicipalBroadcastDefs() {
+  return (
+    <defs>
+      <filter id="municipalBroadcastGlow" x="-8%" y="-8%" width="116%" height="116%">
+        <feGaussianBlur in="SourceAlpha" stdDeviation="1.1" result="blur" />
+        <feComposite in="blur" in2="SourceAlpha" operator="out" result="edge" />
+        <feColorMatrix in="edge" type="matrix" values="0 0 0 0 0.58 0 0 0 0 0.68 0 0 0 0 0.82 0 0 0 0.45 0" result="glow" />
+        <feBlend in="SourceGraphic" in2="glow" mode="screen" />
+      </filter>
+    </defs>
+  );
+}
+
+function getCandidateIndex(candidateById: Record<number, Candidate>, candidateId: CandidateId): number {
+  const ids = Object.keys(candidateById).map(Number).sort((a, b) => a - b);
+  return Math.max(0, ids.indexOf(candidateId));
+}
 
 export function NationalMapCenter({
   paths,
@@ -31,6 +50,7 @@ export function NationalMapCenter({
   showMunicipalities = false,
   municipalityScenarioKey,
   shadeMunicipalitiesByPct = true,
+  municipalityMapStyle = "original",
 }: {
   paths: PathData[];
   results: Record<string, StateResult>;
@@ -39,6 +59,7 @@ export function NationalMapCenter({
   showMunicipalities?: boolean;
   municipalityScenarioKey?: HistoricalMunicipalityScenarioKey;
   shadeMunicipalitiesByPct?: boolean;
+  municipalityMapStyle?: MunicipalityMapStyle;
 }) {
   const [municipalityPaths, setMunicipalityPaths] = useState<RegionalMunicipalityPath[]>([]);
   const [loadingMunicipalities, setLoadingMunicipalities] = useState(false);
@@ -92,6 +113,7 @@ export function NationalMapCenter({
         className="drop-shadow-[0_20px_60px_rgba(0,0,0,0.8)]"
         style={{ display: "block" }}
       >
+        {showMunicipalities && <MunicipalBroadcastDefs />}
         {showMunicipalities && municipalityPaths.length > 0 ? municipalityPaths.map((pathItem) => {
           const stateResult = results[pathItem.uf];
           const candidates = Object.values(candidateById);
@@ -108,16 +130,28 @@ export function NationalMapCenter({
           const pct = winnerId ? municipalityVotes?.[winnerId] ?? 55 : 0;
           const stateWinner = stateResult?.winner ? candidateById[stateResult.winner] : null;
           const statePct = stateResult?.winner ? stateResult.votes[stateResult.winner] : 0;
+          const winnerIndex = winnerId ? getCandidateIndex(candidateById, winnerId) : 0;
           const fill = winner
-            ? shadeMunicipalitiesByPct
-              ? getColorByWinnerPct(winner.color, pct)
-              : winner.color
+            ? getMunicipalityFillColor({
+                baseColor: winner.color,
+                winnerPct: pct,
+                candidateIndex: winnerIndex,
+                shadeByPct: shadeMunicipalitiesByPct,
+                mapStyle: municipalityMapStyle,
+              })
             : stateWinner
               ? getColorByWinnerPct(stateWinner.color, statePct)
               : "#0f172a";
-          const stroke = winner ? shadeHex(winner.color, 0.35, "black") : "#1e293b";
+          const stroke = municipalityMapStyle === "broadcast" ? "#94a3b8" : winner ? shadeHex(winner.color, 0.35, "black") : "#1e293b";
           return (
-            <path key={`${pathItem.uf}-${pathItem.code}`} d={pathItem.d} fill={fill} stroke={stroke} strokeWidth={0.35} />
+            <path
+              key={`${pathItem.uf}-${pathItem.code}`}
+              d={pathItem.d}
+              fill={fill}
+              stroke={stroke}
+              strokeWidth={municipalityMapStyle === "broadcast" ? 0.3 : 0.35}
+              filter={municipalityMapStyle === "broadcast" ? "url(#municipalBroadcastGlow)" : undefined}
+            />
           );
         }) : paths.map((pathItem) => {
           const result = results[pathItem.uf];
@@ -171,6 +205,7 @@ export function RegionalMunicipalityMapCenter({
   mapSizePx,
   municipalityScenarioKey,
   shadeMunicipalitiesByPct = true,
+  municipalityMapStyle = "original",
 }: {
   region: RegionName;
   results: Record<string, StateResult>;
@@ -178,6 +213,7 @@ export function RegionalMunicipalityMapCenter({
   mapSizePx: number;
   municipalityScenarioKey?: HistoricalMunicipalityScenarioKey;
   shadeMunicipalitiesByPct?: boolean;
+  municipalityMapStyle?: MunicipalityMapStyle;
 }) {
   const [paths, setPaths] = useState<RegionalMunicipalityPath[]>([]);
   const [loading, setLoading] = useState(true);
@@ -226,6 +262,7 @@ export function RegionalMunicipalityMapCenter({
         className="drop-shadow-[0_20px_60px_rgba(0,0,0,0.8)]"
         style={{ display: "block" }}
       >
+        <MunicipalBroadcastDefs />
         {paths.map((pathItem) => {
           const stateResult = results[pathItem.uf];
           const candidates = Object.values(candidateById);
@@ -240,13 +277,18 @@ export function RegionalMunicipalityMapCenter({
           const municipalityVotes = stateResult?.municipalities?.[pathItem.code] ?? officialVotes;
           const paintedCandidate = paintedId ? candidateById[paintedId] : null;
           const pct = paintedId ? municipalityVotes?.[paintedId] ?? 55 : 0;
+          const winnerIndex = paintedId ? getCandidateIndex(candidateById, paintedId) : 0;
           let fill = "#0f172a";
           let stroke = "#1e293b";
           if (paintedCandidate) {
-            fill = shadeMunicipalitiesByPct
-              ? getColorByWinnerPct(paintedCandidate.color, pct)
-              : paintedCandidate.color;
-            stroke = shadeHex(paintedCandidate.color, 0.35, "black");
+            fill = getMunicipalityFillColor({
+              baseColor: paintedCandidate.color,
+              winnerPct: pct,
+              candidateIndex: winnerIndex,
+              shadeByPct: shadeMunicipalitiesByPct,
+              mapStyle: municipalityMapStyle,
+            });
+            stroke = municipalityMapStyle === "broadcast" ? "#94a3b8" : shadeHex(paintedCandidate.color, 0.35, "black");
           } else if (stateResult?.winner) {
             const winner = candidateById[stateResult.winner];
             const pct = stateResult.votes[stateResult.winner] || 0;
@@ -256,7 +298,14 @@ export function RegionalMunicipalityMapCenter({
             }
           }
           return (
-            <path key={`${pathItem.uf}-${pathItem.code}`} d={pathItem.d} fill={fill} stroke={stroke} strokeWidth={0.4} />
+            <path
+              key={`${pathItem.uf}-${pathItem.code}`}
+              d={pathItem.d}
+              fill={fill}
+              stroke={stroke}
+              strokeWidth={municipalityMapStyle === "broadcast" ? 0.3 : 0.4}
+              filter={municipalityMapStyle === "broadcast" ? "url(#municipalBroadcastGlow)" : undefined}
+            />
           );
         })}
       </svg>
@@ -276,6 +325,7 @@ export function StateMapCenter({
   candidates = [],
   municipalityScenarioKey,
   shadeMunicipalitiesByPct = true,
+  municipalityMapStyle = "original",
 }: {
   stateInfo: StateInfo;
   winnerColor: string | null;
@@ -288,6 +338,7 @@ export function StateMapCenter({
   candidates?: Candidate[];
   municipalityScenarioKey?: HistoricalMunicipalityScenarioKey;
   shadeMunicipalitiesByPct?: boolean;
+  municipalityMapStyle?: MunicipalityMapStyle;
 }) {
   const [municipalityPaths, setMunicipalityPaths] = useState<MunicipalityPath[]>([]);
   const [loading, setLoading] = useState(true);
@@ -322,6 +373,7 @@ export function StateMapCenter({
         className="drop-shadow-[0_20px_60px_rgba(0,0,0,0.8)]"
         style={{ display: "block" }}
       >
+        {showMunicipalityPaint && <MunicipalBroadcastDefs />}
         {municipalityPaths.length > 0 ? (
           municipalityPaths.map((pathItem) => {
             const officialVotes = getHistoricalMunicipalityCandidatePcts(
@@ -335,16 +387,30 @@ export function StateMapCenter({
             const paintedCandidate = candidateById[paintedId];
             const pathVotes = municipalityVotes?.[pathItem.code] ?? officialVotes;
             const paintedPct = paintedId ? pathVotes?.[paintedId] ?? 55 : 0;
+            const winnerIndex = paintedId ? getCandidateIndex(candidateById, paintedId) : 0;
             const fill = showMunicipalityPaint && paintedCandidate
-              ? shadeMunicipalitiesByPct
-                ? getColorByWinnerPct(paintedCandidate.color, paintedPct)
-                : paintedCandidate.color
+              ? getMunicipalityFillColor({
+                  baseColor: paintedCandidate.color,
+                  winnerPct: paintedPct,
+                  candidateIndex: winnerIndex,
+                  shadeByPct: shadeMunicipalitiesByPct,
+                  mapStyle: municipalityMapStyle,
+                })
               : fallbackFill;
             const stroke = showMunicipalityPaint
-              ? (paintedCandidate ? shadeHex(paintedCandidate.color, 0.35, "black") : "#1e293b")
+              ? municipalityMapStyle === "broadcast"
+                ? "#94a3b8"
+                : (paintedCandidate ? shadeHex(paintedCandidate.color, 0.35, "black") : "#1e293b")
               : fallbackFill;
             return (
-              <path key={pathItem.code} d={pathItem.d} fill={fill} stroke={stroke} strokeWidth={showMunicipalityPaint ? 0.55 : 0} />
+              <path
+                key={pathItem.code}
+                d={pathItem.d}
+                fill={fill}
+                stroke={stroke}
+                strokeWidth={showMunicipalityPaint ? (municipalityMapStyle === "broadcast" ? 0.3 : 0.55) : 0}
+                filter={showMunicipalityPaint && municipalityMapStyle === "broadcast" ? "url(#municipalBroadcastGlow)" : undefined}
+              />
             );
           })
         ) : (

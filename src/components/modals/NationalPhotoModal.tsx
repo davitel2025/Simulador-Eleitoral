@@ -17,7 +17,7 @@ import {
   type WinnerBoxConfig,
 } from "../photo/PhotoCards";
 import { NationalMapCenter } from "../photo/MapCenters";
-import type { Candidate, HistoricalMunicipalityScenarioKey, PathData, StateResult } from "../../types";
+import type { Candidate, HistoricalMunicipalityScenarioKey, MunicipalityMapStyle, PathData, StateResult } from "../../types";
 import {
   clearPersistedStateByPrefix,
   usePersistedState,
@@ -34,6 +34,10 @@ interface NationalPhotoSettings {
   circleBottomSize: number;
   portraitTopSize: number;
   showMunicipalities: boolean;
+  shadeByWinMargin: boolean;
+  fontSizeBase: number;
+  fontColor: string;
+  useCandidateFontColor: boolean;
   winnerBox: WinnerBoxConfig;
 }
 
@@ -124,6 +128,10 @@ export function NationalPhotoModal({
       circleBottomSize: Math.round(80 * photoScale),
       portraitTopSize: Math.round(150 * photoScale * 1.18),
       showMunicipalities: false,
+      shadeByWinMargin: true,
+      fontSizeBase: 14,
+      fontColor: "#ffffff",
+      useCandidateFontColor: false,
       winnerBox: DEFAULT_WINNER_BOX,
     }),
     [photoMapScale, photoScale]
@@ -142,8 +150,14 @@ export function NationalPhotoModal({
     circleBottomSize,
     portraitTopSize,
     showMunicipalities = false,
+    shadeByWinMargin = true,
+    fontSizeBase = 14,
+    fontColor = "#ffffff",
+    useCandidateFontColor = false,
     winnerBox,
   } = settings;
+  const [municipalityMapStyle, setMunicipalityMapStyle] =
+    usePersistedState<MunicipalityMapStyle>("municipalityMapStyle", "original");
   const updateSettings = (updates: Partial<NationalPhotoSettings>) => {
     setSettings((previous) => ({ ...previous, ...updates }));
   };
@@ -287,6 +301,40 @@ export function NationalPhotoModal({
               onChange={(localMapScale) => updateSettings({ localMapScale })}
             />
 
+            <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2">
+              <span className="text-xs font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Fonte</span>
+              <input
+                type="range"
+                min={8}
+                max={32}
+                step={1}
+                value={fontSizeBase}
+                onChange={(e) => updateSettings({ fontSizeBase: Number(e.target.value) })}
+                className="h-2 w-20 appearance-none rounded-full bg-slate-700 accent-violet-500"
+              />
+              <span className="w-9 text-right text-xs font-bold text-slate-400">{fontSizeBase}px</span>
+            </div>
+
+            <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-xs font-black uppercase tracking-widest text-slate-400">
+              Cor texto
+              <input
+                type="color"
+                value={fontColor}
+                onChange={(e) => updateSettings({ fontColor: e.target.value })}
+                className="h-6 w-6 cursor-pointer rounded border border-slate-600"
+                style={{ padding: "1px" }}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => updateSettings({ useCandidateFontColor: !useCandidateFontColor })}
+              className={`rounded-xl border px-3 py-2 text-xs font-black transition-all ${
+                useCandidateFontColor ? "border-amber-300/60 bg-amber-400/20 text-amber-100" : "border-white/10 bg-slate-900/80 text-slate-300"
+              }`}
+            >
+              Cor dos candidatos
+            </button>
+
             <div className="flex rounded-xl border border-white/10 bg-slate-900/80 p-1">
               <button
                 type="button"
@@ -305,6 +353,34 @@ export function NationalPhotoModal({
                 }`}
               >
                 Municípios
+              </button>
+            </div>
+
+            {showMunicipalities && (
+                <button
+                  type="button"
+                  onClick={() => updateSettings({ shadeByWinMargin: !shadeByWinMargin })}
+                  className={`rounded-xl border px-3 py-2 text-xs font-black transition-all ${
+                    shadeByWinMargin ? "border-emerald-400/60 bg-emerald-500/15 text-emerald-200" : "border-slate-600 bg-slate-900/80 text-slate-300"
+                  }`}
+                >
+                  Estratificar por intensidade
+                </button>
+            )}
+            <div className="flex rounded-xl border border-white/10 bg-slate-900/80 p-1">
+              <button
+                type="button"
+                onClick={() => setMunicipalityMapStyle("original")}
+                className={`rounded-lg px-3 py-1 text-xs font-black ${municipalityMapStyle === "original" ? "bg-violet-600 text-white" : "text-slate-300"}`}
+              >
+                Original
+              </button>
+              <button
+                type="button"
+                onClick={() => setMunicipalityMapStyle("broadcast")}
+                className={`rounded-lg px-3 py-1 text-xs font-black ${municipalityMapStyle === "broadcast" ? "bg-violet-600 text-white" : "text-slate-300"}`}
+              >
+                Broadcast
               </button>
             </div>
 
@@ -365,6 +441,9 @@ export function NationalPhotoModal({
                   shape={cardShape}
                   frameConfig={winnerBox}
                   frameSurfaceColor={frameSurfaceColor}
+                  fontSizeBase={fontSizeBase}
+                  fontColor={fontColor}
+                  useCandidateFontColor={useCandidateFontColor}
                 />
               </div>
             )}
@@ -376,7 +455,8 @@ export function NationalPhotoModal({
               mapSizePx={localMapScale}
               showMunicipalities={showMunicipalities}
               municipalityScenarioKey={municipalityScenarioKey}
-              shadeMunicipalitiesByPct={true}
+              shadeMunicipalitiesByPct={shadeByWinMargin}
+              municipalityMapStyle={municipalityMapStyle}
             />
 
             {ranked.second && (
@@ -391,6 +471,9 @@ export function NationalPhotoModal({
                   shape={cardShape}
                   frameConfig={winnerBox}
                   frameSurfaceColor={frameSurfaceColor}
+                  fontSizeBase={fontSizeBase}
+                  fontColor={fontColor}
+                  useCandidateFontColor={useCandidateFontColor}
                 />
               </div>
             )}
@@ -413,6 +496,9 @@ export function NationalPhotoModal({
                     item={item}
                     avatarPx={circleBottomSize}
                     showVotes={true}
+                    fontSizeBase={fontSizeBase}
+                    fontColor={fontColor}
+                    useCandidateFontColor={useCandidateFontColor}
                   />
                 ))}
                 {ranked.hasOthers && (
@@ -421,6 +507,8 @@ export function NationalPhotoModal({
                     othersVotes={ranked.othersVotes}
                     avatarPx={circleBottomSize}
                     showVotes={true}
+                    fontSizeBase={fontSizeBase}
+                    fontColor={fontColor}
                   />
                 )}
               </div>

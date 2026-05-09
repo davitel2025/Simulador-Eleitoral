@@ -1,280 +1,341 @@
-CONTEXTO DO PROJETO:
-Você tem acesso ao repositório local do projeto "Simulador Eleitoral" (https://github.com/davitel2025/Simulador-Eleitoral), que é uma aplicação React + TypeScript + Vite que simula resultados de eleições presidenciais brasileiras. O projeto usa D3-geo para mapas, Framer Motion para animações e Tailwind CSS para estilo. Ele já possui:
-- Um mapa SVG interativo do Brasil dividido por estados (com GeoJSON do IBGE)
-- Sistema de "pintura" de municípios por estado individualmente (MunicipalityPaintModal.tsx)
-- Cenários históricos pré-definidos (historical scenarios) para eleições de 2018 e 2022
-- Exportação/importação de cenários em JSON
-- Geração de fotos/imagens (PNG) dos resultados nacionais, por estado e por região
+# 📋 PROMPT COMPLETO PARA MODIFICAÇÕES NO SIMULADOR ELEITORAL
 
-Leia e analise TODOS os arquivos do projeto antes de fazer qualquer modificação, especialmente:
-- src/components/screens/ElectionSimulator.tsx (arquivo principal, ~112KB — o maior do projeto)
-- src/components/screens/CandidateSetupScreen.tsx
-- src/components/modals/MunicipalityPaintModal.tsx
-- src/components/modals/NationalPhotoModal.tsx
-- src/components/modals/RegionalPhotoModal.tsx
-- src/components/photo/PhotoCards.tsx
-- src/data/ (todos os arquivos de dados, incluindo cenários históricos)
-- Qualquer arquivo de tipos TypeScript (types.ts ou similar) que defina as interfaces dos cenários
+**Copia e cola este prompt inteiro na tua IA integrada ao terminal.**
 
-===========================================================================
-TAREFA 1 — CORRIGIR OS DADOS DOS CENÁRIOS HISTÓRICOS (2018 e 2022)
-===========================================================================
+---
 
-Localize onde os cenários históricos estão definidos no código (provavelmente em src/data/historicalScenarios.ts ou dentro de ElectionSimulator.tsx como um objeto/array). Corrija os dados com os valores REAIS do TSE descritos abaixo.
+## CONTEXTO DO PROJETO
 
---- ELEIÇÕES 2018 — 1º TURNO (dados oficiais TSE, votos válidos por estado) ---
+Você vai trabalhar em um **Simulador Eleitoral Brasileiro** — uma aplicação web feita com **React 19 + TypeScript + Vite 7 + Tailwind CSS 4 + Framer Motion + D3-geo + html-to-image + html2canvas**.
 
-Candidatos: Jair Bolsonaro (PSL), Fernando Haddad (PT), Ciro Gomes (PDT), Geraldo Alckmin (PSDB)
-Cores sugeridas: Bolsonaro → #005a8e (azul), Haddad → #cc0000 (vermelho), Ciro → #ff7f00 (laranja), Alckmin → #0066cc (azul claro)
+O repositório está em: `https://github.com/davitel2025/Simulador-Eleitoral`
 
-Resultado nacional (votos válidos):
-- Bolsonaro: 46,03%
-- Haddad:    29,28%
-- Ciro:      12,47%
-- Alckmin:    4,76%
-- Outros:     7,46% (distribuídos entre os demais)
+### Estrutura de diretórios relevante:
 
-Resultado por estado — porcentagens de votos válidos (apenas top candidatos, excluindo brancos/nulos):
+```
+src/
+├── App.tsx                                         # Entry point, gerencia telas (InitialScreen → CandidateSetup → ElectionSimulator)
+├── types.ts                                        # Tipos: Candidate, StateInfo, StateResult, PoliticalScenario, RankedItem, etc.
+├── data/
+│   ├── states.ts                                   # Array STATES[] com uf, name, region, voters, voters2018, voters2022, ibgeCode
+│   ├── presetCandidates.ts                         # URLs de fotos (Wikimedia) e logos dos partidos, array PRESET_CANDIDATES
+│   ├── scenarios.ts                                # Cenários históricos (2018 1t/2t, 2022 1t/2t, 2026 1t/2t) com candidatos e resultados
+│   ├── historicalElectionResults.ts                # JSON gigante com votos por município (HISTORICAL_MUNICIPALITY_RESULTS) e porcentagens por estado (HISTORICAL_STATE_RESULTS_BY_NUMBER). Também tem funções helper: getHistoricalMunicipalityCandidatePcts(), buildHistoricalStateResults(), normalizeHistoricalMunicipalityName()
+│   └── data_cenarios/                              # JSONs de cenários 2026
+├── components/
+│   ├── photo/
+│   │   ├── PhotoCards.tsx                          # Componentes TopCandidateCard, BottomCandidateCard, OthersCard, MapSizeSlider, AvatarSizeControls, PhotoBackgroundPicker, WinnerBoxControls + funções de captura (captureAndDownload, savePhotoPng, preloadImagesAsBase64, resolveCaptureImageUrl, downloadCanvasAsPng)
+│   │   └── MapCenters.tsx                          # Coordenadas dos centros dos estados para posicionamento no mapa
+│   ├── modals/
+│   │   ├── NationalPhotoModal.tsx                  # Modal de foto nacional — captura ref, ranking, controles (shape, avatar, moldura, bg, mapa), layout horizontal com top2 + mapa + bottom3 + total
+│   │   ├── RegionalPhotoModal.tsx                  # Modal de foto regional — parecido com nacional mas filtrado por região
+│   │   ├── StatePhotoModal.tsx                     # Modal de foto estadual — mapa do estado individual
+│   │   ├── MunicipalityPaintModal.tsx              # Modal de pintura de municípios — carrega GeoJSON, permite pintar municípios com candidato, importar cenário histórico
+│   │   ├── StateModal.tsx                          # Modal de edição de votos por estado — sliders por candidato
+│   │   └── StateActionModal.tsx                    # Menu de ações do estado (editar, foto, municípios, resetar, zoom, excluir)
+│   ├── screens/
+│   │   ├── InitialScreen.tsx                       # Tela inicial — seleção de cenário, estados, eleitorado
+│   │   ├── CandidateSetupScreen.tsx                # Tela de configuração de candidatos
+│   │   └── ElectionSimulator.tsx                   # Tela principal do simulador — mapa interativo com zoom, tooltip, context menu, analytics
+│   ├── CandidateManager.tsx                        # Gerenciador de candidatos
+│   └── UserIcon.tsx
+├── hooks/
+│   └── usePersistedState.ts                        # Hook de estado persistido em localStorage
+└── erro.txt                                        # Log de erros CORS do Wikimedia
+```
 
-AC: Bolsonaro 62,24% | Haddad 18,53% | Ciro 5,17% | Outros 14,05%
-AL: Haddad 44,75%   | Bolsonaro 34,40% | Ciro 10,12% | Outros 10,72%
-AP: Bolsonaro 40,74% | Haddad 32,77% | Ciro 12,34% | Outros 14,17%
-AM: Bolsonaro 43,48% | Haddad 40,30% | Ciro 7,50% | Outros 8,73%
-BA: Haddad 60,28%   | Bolsonaro 23,41% | Ciro 9,41% | Outros 6,90%
-CE: Ciro 40,95%     | Haddad 33,12% | Bolsonaro 21,74% | Outros 4,19%
-DF: Bolsonaro 58,37% | Ciro 16,60% | Haddad 11,87% | Outros 13,16%
-ES: Bolsonaro 54,76% | Haddad 24,20% | Ciro 9,54% | Outros 11,49%
-GO: Bolsonaro 57,24% | Haddad 21,86% | Ciro 8,60% | Outros 12,30%
-MA: Haddad 61,26%   | Bolsonaro 24,28% | Ciro 8,39% | Outros 6,06%
-MT: Bolsonaro 60,04% | Haddad 24,76% | Ciro 5,59% | Outros 9,61%
-MS: Bolsonaro 55,06% | Haddad 23,87% | Ciro 8,04% | Outros 13,04%
-MG: Bolsonaro 48,31% | Haddad 27,65% | Ciro 11,64% | Outros 12,41%
-PA: Haddad 41,39%   | Bolsonaro 36,19% | Ciro 10,03% | Outros 12,37%
-PB: Haddad 45,46%   | Bolsonaro 31,30% | Ciro 16,75% | Outros 6,50%
-PR: Bolsonaro 56,89% | Haddad 19,70% | Ciro 8,31% | Outros 15,10%
-PE: Haddad 48,87%   | Bolsonaro 30,57% | Ciro 13,56% | Outros 7,00%
-PI: Haddad 63,40%   | Bolsonaro 18,76% | Ciro 11,42% | Outros 6,42%
-RJ: Bolsonaro 59,79% | Ciro 15,22% | Haddad 14,69% | Outros 10,30%
-RN: Haddad 41,19%   | Ciro 22,31% | Bolsonaro 30,21% | Outros 6,31%
-RS: Bolsonaro 52,63% | Haddad 22,81% | Ciro 11,37% | Outros 13,18%
-RO: Bolsonaro 62,24% | Haddad 20,36% | Ciro 6,03% | Outros 17,39%
-RR: Bolsonaro 62,97% | Haddad 17,85% | Ciro 5,36% | Outros 13,83%
-SC: Bolsonaro 65,82% | Haddad 15,13% | Ciro 6,68% | Outros 12,36%
-SP: Bolsonaro 53,00% | Haddad 16,42% | Ciro 11,35% | Outros 19,22%
-SE: Haddad 50,09%   | Bolsonaro 27,21% | Ciro 13,02% | Outros 9,67%
-TO: Bolsonaro 44,64% | Haddad 41,12% | Ciro 7,17% | Outros 7,07%
+---
 
-ATENÇÃO: Para o cenário de 1º turno 2018, certifique-se de que a soma das porcentagens
-de todos os candidatos em cada estado não ultrapasse 100%. Se o sistema usa apenas
-os candidatos principais (Bolsonaro, Haddad, Ciro, Alckmin), normalize para que
-a soma seja 100%, mantendo as proporções relativas corretas do TSE.
+## TAREFAS A EXECUTAR (em ordem de prioridade)
 
---- ELEIÇÕES 2022 — 2º TURNO (dados oficiais TSE por estado) ---
+---
 
-Candidatos: Lula (PT) e Bolsonaro (PL)
-Cores: Lula → #cc0000 (vermelho), Bolsonaro → #005a8e (azul)
+### 📌 TAREFA 1: Aumentar o zoom máximo do mapa nas fotos (nacional/regional/estadual)
 
-Resultado por estado — porcentagens de votos válidos:
+**Arquivos afetados:** `src/components/modals/NationalPhotoModal.tsx`, `src/components/modals/RegionalPhotoModal.tsx`, `src/components/modals/StatePhotoModal.tsx`, `src/components/photo/PhotoCards.tsx` (componente `MapSizeSlider`)
 
-AC:  Lula 29,70%  | Bolsonaro 70,30%  → VENCEDOR: Bolsonaro
-AL:  Lula 58,68%  | Bolsonaro 41,32%  → VENCEDOR: Lula
-AP:  Lula 48,64%  | Bolsonaro 51,36%  → VENCEDOR: Bolsonaro
-AM:  Lula 51,10%  | Bolsonaro 48,90%  → VENCEDOR: Lula
-BA:  Lula 72,12%  | Bolsonaro 27,88%  → VENCEDOR: Lula
-CE:  Lula 69,97%  | Bolsonaro 30,03%  → VENCEDOR: Lula
-DF:  Lula 41,19%  | Bolsonaro 58,81%  → VENCEDOR: Bolsonaro
-ES:  Lula 41,96%  | Bolsonaro 58,04%  → VENCEDOR: Bolsonaro
-GO:  Lula 41,29%  | Bolsonaro 58,71%  → VENCEDOR: Bolsonaro
-MA:  Lula 71,14%  | Bolsonaro 28,86%  → VENCEDOR: Lula
-MT:  Lula 34,92%  | Bolsonaro 65,08%  → VENCEDOR: Bolsonaro
-MS:  Lula 40,51%  | Bolsonaro 59,49%  → VENCEDOR: Bolsonaro
-MG:  Lula 50,20%  | Bolsonaro 49,80%  → VENCEDOR: Lula
-PA:  Lula 54,75%  | Bolsonaro 45,25%  → VENCEDOR: Lula
-PB:  Lula 66,62%  | Bolsonaro 33,38%  → VENCEDOR: Lula
-PR:  Lula 37,60%  | Bolsonaro 62,40%  → VENCEDOR: Bolsonaro
-PE:  Lula 66,93%  | Bolsonaro 33,07%  → VENCEDOR: Lula
-PI:  Lula 76,86%  | Bolsonaro 23,14%  → VENCEDOR: Lula
-RJ:  Lula 43,47%  | Bolsonaro 56,53%  → VENCEDOR: Bolsonaro
-RN:  Lula 65,10%  | Bolsonaro 34,90%  → VENCEDOR: Lula
-RS:  Lula 43,65%  | Bolsonaro 56,35%  → VENCEDOR: Bolsonaro
-RO:  Lula 29,34%  | Bolsonaro 70,66%  → VENCEDOR: Bolsonaro
-RR:  Lula 23,92%  | Bolsonaro 76,08%  → VENCEDOR: Bolsonaro
-SC:  Lula 30,73%  | Bolsonaro 69,27%  → VENCEDOR: Bolsonaro
-SP:  Lula 44,76%  | Bolsonaro 55,24%  → VENCEDOR: Bolsonaro
-SE:  Lula 67,54%  | Bolsonaro 32,46%  → VENCEDOR: Lula
-TO:  Lula 51,02%  | Bolsonaro 48,98%  → VENCEDOR: Lula
+**Problema:** O slider de tamanho do mapa (componente `MapSizeSlider` no PhotoCards.tsx) permite apenas até ~600px de scale atualmente. O usuário quer poder ampliar o mapa ainda mais nas fotos geradas.
 
-Resultado nacional: Lula 50,90% | Bolsonaro 49,10%
+**O que fazer:**
+1. No componente `MapSizeSlider` em `PhotoCards.tsx`, aumente o valor **máximo** do `<input type="range">` de `max={600}` (ou o valor atual) para **`max={1200}`**. Verifique qual é o `max` atual e pelo menos duplique.
+2. Em cada um dos três modais de foto (`NationalPhotoModal.tsx`, `RegionalPhotoModal.tsx`, `StatePhotoModal.tsx`), verifique se o `localMapScale` (estado que controla o tamanho do mapa na área capturada) está sendo corretamente aplicado como `width` e `height` no SVG/Container do mapa dentro da área `captureRef`. Aumente qualquer limitação artificial que impeça o mapa de crescer além de certo tamanho.
+3. Garanta que o mapa dentro da área de captura PNG não seja cortado — se o `overflow` do container estiver `hidden`, mude para `visible` ou ajuste o container para crescer com o mapa.
+4. Mantenha a responsividade: o mapa na área de captura pode ser maior que a tela — o que importa é que o PNG final capture corretamente.
 
-===========================================================================
-TAREFA 2 — ADICIONAR DADOS DE MUNICÍPIOS NO CENÁRIO HISTÓRICO 2022
-===========================================================================
+---
 
-No cenário histórico do 2º turno de 2022, além dos dados por estado (Tarefa 1),
-adicione o resultado por MUNICÍPIO (quem venceu em cada um).
+### 📌 TAREFA 2: Opção de layout de download (16:9 ou 9:16) ao baixar PNG
 
-IMPORTANTE — Como funciona o sistema atual de municípios:
-- O MunicipalityPaintModal.tsx já permite "pintar" municípios por candidato dentro de cada estado
-- Os municípios pintados ficam salvos na estrutura de dados do cenário (provavelmente como
-  um campo "municipalities" ou "municipalityData" dentro de cada estado no objeto do cenário)
-- Para o cenário histórico 2022, esse campo deve ser preenchido com os vencedores reais
+**Arquivos afetados:** `src/components/modals/NationalPhotoModal.tsx`, `src/components/modals/RegionalPhotoModal.tsx`, `src/components/modals/StatePhotoModal.tsx`, `src/components/photo/PhotoCards.tsx`
 
-Resultado geral por município no 2º turno 2022:
-- Lula venceu em 3.123 municípios
-- Bolsonaro venceu em 2.444 municípios
-- Empate em 2 municípios (Guará/SP e Irati/SC — tratar como Bolsonaro ou empate conforme o sistema suportar)
-- Total: 5.570 municípios
+**O que fazer:**
+1. **Antes de cada botão de download ("Salvar PNG")** nos três modais de foto, adicione um **seletor de layout** com duas opções: **"16:9 Paisagem"** e **"9:16 Retrato (celular)"**. Use botões toggle ou radio buttons estilizados, com visual compacto e inline.
+2. O estado desse seletor (ex: `downloadLayout: "16:9" | "9:16"`) deve ser persistido com `usePersistedState` (como já é feito com outras configurações).
+3. **Layout 16:9 (paisagem):** É o layout já existente — mantenha exatamente como está. Apenas garanta que a área capturada (`captureRef`) tenha proporção próxima de 16:9 (se já não tiver, ajuste o padding/container).
+4. **Layout 9:16 (retrato/celular):** Está detalhado na **TAREFA 3** abaixo.
+5. Na hora do download, a função `handleDownload` deve usar a ref correta conforme o layout selecionado. Se for "9:16", usar a ref do container vertical; se for "16:9", usar a ref do container horizontal.
+6. **O layout 9:16 só deve estar disponível quando a eleição estiver em segundo turno** (ou seja, `electionRound === "segundo"` ou quando o cenário tem `round: "segundo"` e tem exatamente 2 candidatos). Se estiver em primeiro turno, o botão de 9:16 deve estar desabilitado (disabled, com tooltip "Disponível apenas no 2º turno").
 
-ESTRATÉGIA DE IMPLEMENTAÇÃO para os dados de municípios:
-Como não é viável hardcodar 5.570 municípios manualmente no código, adote a seguinte abordagem:
+---
 
-OPÇÃO A (preferencial): Crie uma função utilitária que atribua o vencedor do município
-com base em heurística regional. Use os padrões reais conhecidos:
+### 📌 TAREFA 3: Layout 9:16 (formato celular / stories) para segundo turno
 
-Padrão geral por região:
-- NORDESTE: ~80-90% dos municípios para Lula. Exceções: capitais e cidades grandes podem variar.
-  Estados com maior domínio de Lula: PI (quase todos), MA, BA, CE, PE, PB, RN, SE, AL
-- NORTE: maioria dos municípios para Bolsonaro, exceto cidades grandes de AM, PA, TO
-  AC, RO, RR: esmagadora maioria Bolsonaro
-  AM: maioria Bolsonaro, mas Manaus e região oeste para Lula
-  PA: dividido — Lula venceu no estado, metade dos municípios para cada
-  TO: levemente Lula no estado (51%), municípios bem divididos
-- CENTRO-OESTE: esmagadora maioria para Bolsonaro em todos os estados (GO, MT, MS, DF)
-- SUDESTE:
-  SP: maioria dos municípios para Bolsonaro (interior), capital e Grande SP para Lula
-  MG: dividido quase 50/50 — sul/sudoeste/triângulo para Bolsonaro, norte/nordeste/BH para Lula
-  RJ: maioria dos municípios para Bolsonaro, exceto capital e Baixada Fluminense para Lula
-  ES: maioria para Bolsonaro
-- SUL: esmagadora maioria para Bolsonaro
-  PR, SC: quase todos os municípios para Bolsonaro
-  RS: maioria para Bolsonaro, exceto POA e região sul (fronteira) para Lula
+**Arquivos afetados:** `src/components/modals/NationalPhotoModal.tsx` (principalmente), e possivelmente `RegionalPhotoModal.tsx` e `StatePhotoModal.tsx` se fizer sentido.
 
-OPÇÃO B (alternativa): Se o sistema de municípios usa os códigos IBGE (geocódigo de 7 dígitos),
-crie uma fonte de dados externa ou um JSON estático em src/data/municipios2022.ts com
-os vencedores por código IBGE. Você pode gerar esse arquivo baseado na heurística acima,
-seguindo os padrões regionais reais.
+**Especificações detalhadas do layout 9:16:**
 
-Se o projeto já tem um arquivo de dados geoespacial (GeoJSON) com os municípios, use os
-identificadores já presentes nele (id, properties.CD_MUN ou properties.GEOCODIGO, etc.)
-para criar o mapeamento vencedor → candidato.
+Quando o usuário selecionar "9:16 Retrato" e estiver em segundo turno, a área capturada (`captureRef`) deve renderizar um layout completamente diferente do layout horizontal padrão. Este layout deve ter **formato vertical (9:16)**, pensado para celular e stories.
 
-CAMPOS A PREENCHER POR MUNICÍPIO (no formato já usado pelo sistema):
-- Se o formato existente usa { municipioId: string, winner: CandidateId }, siga esse padrão
-- Se usa pinturas por cor ou index de candidato, siga o padrão já estabelecido
-- NÃO altere a estrutura de tipos já definida no projeto — apenas preencha os dados
+**Estrutura do layout (de cima para baixo):**
 
-O candidato "Lula" no cenário histórico 2022 deve ter id correspondente ao candidato 1
-(verifique qual é o id correto no objeto do cenário já existente).
-O candidato "Bolsonaro" deve ter o id correspondente ao candidato 2.
+#### Topo
+- **Título pequeno centralizado** no alto da imagem, tipo `"Resultado Eleição 2026"` em fonte pequena-média (14-16px), cor branca com leve opacidade, centralizado.
 
-===========================================================================
-TAREFA 3 — MAPA NACIONAL POR MUNICÍPIO (nova funcionalidade)
-===========================================================================
+#### Área superior/média (os dois candidatos lado a lado)
+- **Os dois candidatos do segundo turno** posicionados **lado a lado** na metade superior da imagem.
+- Cada candidato deve manter:
+  - **Card de foto** com cantos arredondados (border-radius ~12px), borda colorida de 3-4px na cor do partido (`candidate.color`), e sombra discreta (`box-shadow: 0 4px 12px rgba(0,0,0,0.3)`).
+  - **Foto do candidato** dentro do card (formato retrato/portrait, ~3:4). Se não houver foto, mostrar placeholder com o número.
+  - **Nome em branco**, fonte grossa (`font-weight: 700-800`), fonte ~16-18px, centralizado abaixo da foto.
+  - **Informações menores** em pequenos blocos escuros arredondados (bg rgba preto, border-radius 8px, padding 2px 8px):
+    - Vice (ex: `"Vice: Hamilton Mourão"`)
+    - Espectro ideológico (ex: `"Direita / conservador"`)
+    - Slogan/coligação se houver
+- **Espaçamento:** Os dois cards ficam um de cada lado (esquerda e direita) com um gap de ~16-24px entre eles.
 
-Atualmente, no mapa principal (ElectionSimulator.tsx), o Brasil é exibido com estados
-coloridos. Já existe a funcionalidade de "pintar municípios" dentro de cada estado
-individualmente (MunicipalityPaintModal.tsx). A nova funcionalidade pedida é:
+#### Área central (mapa do Brasil)
+- **Mapa do Brasil centralizado** logo abaixo dos candidatos.
+- O mapa deve ser **maior que no layout horizontal**, ocupando bem o centro da arte, mas sem encostar nos textos.
+- Preserve todas as cores dos estados (gradiente do vencedor), contornos e estilo flat/sombreado do mapa original.
+- O mapa deve ser renderizado usando o mesmo SVG que já existe no layout horizontal, apenas redimensionado para caber melhor no centro do layout vertical.
+- Use o `localMapScale` ajustado para o formato vertical — o default para 9:16 deve ser ~400-500px de largura.
 
-ADICIONAR UM BOTÃO/TOGGLE na interface do mapa principal (ElectionSimulator.tsx) que,
-quando ativado, substitui a visualização de estados coloridos por uma visualização de
-TODOS os municípios do Brasil coloridos simultaneamente no mapa nacional.
+#### Área inferior (percentuais)
+- **Percentuais GRANDES** na parte inferior, alinhados com cada candidato:
+  - Percentual do candidato da **esquerda** no **canto inferior esquerdo**.
+  - Percentual do candidato da **direita** no **canto inferior direito**.
+- **Fonte:** Os percentuais devem ser o **maior elemento textual** da composição — use tamanho ~48-64px, `font-weight: 900`, cor branca.
+- **Cor de destaque:** Cada percentual pode ter a cor do candidato como `color` ou como sombra/contorno sutil.
+- **Abaixo de cada percentual**, em texto pequeno (~12-14px, opacidade 0.7): o número de votos absolutos formatado com `toLocaleString("pt-BR")`.
+- **Total de votos válidos** opcionalmente no rodapé, em texto bem pequeno.
 
-Especificações técnicas:
+#### Estilo geral do layout 9:16
+- **Background:** O mesmo background configurado pelo `PhotoBackgroundPicker` (cor sólida, gradiente ou imagem). Default: `#0f172a`.
+- **Dimensões da área capturada:** Proporção 9:16 (ex: 540×960, 1080×1920, etc). O container deve ter `width` fixo e `height` proporcional.
+- **Fontes e cores:** Manter o mesmo padrão visual do layout horizontal — fontes brancas/slate, blocos escuros, bordas coloridas.
+- **A área capturada para download** deve ser um container separado (não o mesmo do layout 16:9). Use uma segunda `ref` (ex: `captureRefVertical`).
 
-1. TOGGLE DE VISUALIZAÇÃO:
-   - Adicione um botão ou switch na barra de controles do mapa (mesma área onde ficam
-     os botões de zoom, legenda, etc.)
-   - Sugestão de label: "Por município" / "Por estado" (alternando)
-   - Ou use um ícone de mapa com tooltip explicativo
-   - O toggle deve ser visualmente consistente com o design existente (dark theme, bordas
-     arredondadas, estilo similar aos outros botões do projeto)
+**Implementação prática:**
+1. Crie um novo componente (ou bloco JSX condicional dentro do NationalPhotoModal) que renderiza o layout 9:16 quando `downloadLayout === "9:16"`.
+2. Esse componente deve receber as mesmas props/dados que o layout horizontal usa (ranking, candidates, national, mapa, etc).
+3. O container deve ter estilo inline: `width: 540px; aspect-ratio: 9/16; position: relative; overflow: hidden;`.
+4. O mapa deve ser renderizado com o mesmo SVG do Brasil já utilizado, usando o `localMapScale` (ou um novo estado `verticalMapScale`).
+5. No `handleDownload`, quando `downloadLayout === "9:16"`, usar a `captureRefVertical` em vez da `captureRef` padrão.
 
-2. CARREGAMENTO DO GEOJSON DE MUNICÍPIOS:
-   - O projeto provavelmente já carrega o GeoJSON de municípios via fetch assíncrono
-     para o MunicipalityPaintModal. Verifique como isso é feito.
-   - Reutilize a mesma fonte de dados de municípios, mas agora para renderizar todos
-     os estados ao mesmo tempo no mapa nacional.
-   - Se o GeoJSON de municípios for muito pesado para renderizar todos de uma vez,
-     implemente lazy loading: carregue os municípios apenas quando o toggle for ativado,
-     com um indicador de loading (spinner ou texto "Carregando municípios...").
+---
 
-3. RENDERIZAÇÃO NO SVG PRINCIPAL:
-   - Quando o modo "por município" estiver ativo, substitua os paths dos estados pelos
-     paths dos municípios dentro do mesmo SVG viewBox já definido no mapa.
-   - Use a mesma projeção D3-geo já configurada no projeto.
-   - Cada município deve ser colorido com a cor do candidato que o venceu (usando
-     o campo municipalityData/municipalities do resultado de cada estado).
-   - Se um município não tiver resultado definido, use a cor neutra já usada para
-     estados sem resultado (cinza escuro ou a cor padrão do tema).
-   - Municípios sem dado devem ser transparentes ou cinza, igual ao comportamento
-     atual de estados não preenchidos.
+### 📌 TAREFA 4: [BUG FIX] Importar cenário histórico de municípios está quebrado — todos os municípios ficam com a mesma porcentagem
 
-4. INTERATIVIDADE NO MODO MUNICÍPIO:
-   - Hover: ao passar o mouse sobre um município, exibir tooltip com:
-     * Nome do município
-     * Estado (UF)
-     * Candidato vencedor e porcentagem (se disponível)
-   - NÃO é necessário implementar clique para editar município no modo nacional
-     (manter o comportamento atual: para editar, o usuário vai no modal por estado)
-   - O zoom/pan já existente no mapa deve continuar funcionando normalmente
+**Arquivos afetados:** `src/components/modals/MunicipalityPaintModal.tsx`, `src/data/historicalElectionResults.ts`
 
-5. PERFORMANCE:
-   - Se o GeoJSON de municípios for muito grande (pode ter milhares de paths SVG),
-     considere simplificar as geometrias com turf.js ou D3's simplify, OU renderize
-     apenas os municípios dos estados que já têm dados de municípios pintados.
-   - Adicione um aviso visual se a performance estiver comprometida (ex: "Modo município
-     pode ser lento em dispositivos mais simples").
+**Problema detalhado:** Quando o usuário importa um cenário histórico (ex: Eleições 2018 2º turno) e clica em "Importar cenário histórico" dentro do modal de municípios, o resultado é que **todos os municípios ficam com porcentagens iguais** para todos os candidatos, e apenas um candidato aparece ganhando em todos os municípios.
 
-6. ESTADO DO TOGGLE:
-   - Persista o estado do toggle no estado local do componente (useState).
-   - NÃO é necessário persistir no localStorage ou no JSON do cenário.
-   - Quando o usuário alternar entre cenários, o toggle deve voltar para "por estado".
+**Análise da causa provável:**
 
-===========================================================================
-INSTRUÇÕES GERAIS DE IMPLEMENTAÇÃO
-===========================================================================
+No `MunicipalityPaintModal.tsx`, a função `handleImportHistoricalScenario` faz:
 
-1. LEIA O CÓDIGO COMPLETO antes de modificar qualquer arquivo. O ElectionSimulator.tsx
-   tem ~112KB e contém a lógica central. Entenda os types/interfaces antes de mexer.
+```ts
+const votes = getHistoricalMunicipalityCandidatePcts(
+  scenarioKey,
+  stateInfo.uf,
+  path.name,
+  candidates
+);
+const winner = getHistoricalWinnerCandidateId(votes);
+if (!votes || !winner) return;
+nextPaint[path.code] = winner;
+nextMunicipalities[path.code] = votes;
+```
 
-2. PRESERVE A ARQUITETURA EXISTENTE:
-   - Não refatore funções que não estão sendo modificadas
-   - Mantenha o padrão de nomenclatura (camelCase, prefixo "handle" para handlers, etc.)
-   - Use os mesmos hooks e padrões de estado já usados no projeto
-   - Mantenha os imports organizados da forma que já estão
+A função `getHistoricalMunicipalityCandidatePcts` (em `historicalElectionResults.ts`) faz:
 
-3. TYPESCRIPT: Certifique-se de que todos os novos campos adicionados nas interfaces
-   de tipo sejam opcionais (?) para não quebrar cenários existentes sem esses dados.
-   Exemplo: municipalityWinners?: Record<string, CandidateId>
+```ts
+export function getHistoricalMunicipalityCandidatePcts(
+  scenarioKey, uf, name, candidates
+) {
+  const votesByNumber = getHistoricalMunicipalityVotes(scenarioKey, uf, name);
+  // ... calcula porcentagens baseado nos números dos candidatos
+}
+```
 
-4. BUILD E DEPLOY:
-   - Após as modificações, rode "npm run build" para gerar o dist/
-   - O projeto usa GitHub Pages servindo a pasta /docs — se houver um script de deploy
-     que copia dist/ para docs/, rode-o também
-   - Certifique-se de que não há erros de TypeScript (npx tsc --noEmit)
+E `getHistoricalMunicipalityVotes` busca no `HISTORICAL_MUNICIPALITY_RESULTS` usando a chave `"UF:nome_normalizado"`.
 
-5. ORDEM DE EXECUÇÃO RECOMENDADA:
-   a) Primeiro: leia todos os arquivos relevantes listados no início deste prompt
-   b) Segundo: corrija os dados históricos (Tarefa 1) — menor risco de quebrar coisas
-   c) Terceiro: adicione os dados de municípios no cenário 2022 (Tarefa 2)
-   d) Quarto: implemente o toggle de mapa por município (Tarefa 3 — maior complexidade)
-   e) Por fim: build e teste
+**Possíveis causas:**
+1. **Normalização de nome:** `normalizeHistoricalMunicipalityName` remove acentos e converte para minúsculas, mas o nome do município no GeoJSON pode estar em formato diferente (capitalizado, com espaços extras, etc.) vs. o nome nos dados históricos. Se não bater, `getHistoricalMunicipalityVotes` retorna `undefined`, e o município não recebe dados.
+2. **Matching por número de candidato:** Os dados históricos usam **número do candidato** (ex: `"17"` para Bolsonaro em 2018). Mas os IDs dos candidatos no cenário importado são **1, 2, 3...** (index + 1). A função `getHistoricalMunicipalityCandidatePcts` tenta fazer o match usando `candidate.number`, mas se o `candidates` array passado para a função não tiver os `.number` corretos (porque os IDs foram reatribuídos no `handleSelectScenario` do App.tsx com `candidatesWithIds: Candidate[] = scenario.candidates.map((c, i) => ({ ...c, id: i + 1 }))`), o `.number` deve estar correto. Verifique se o `candidate.number` bate com os números nos dados históricos.
+3. **Estrutura dos votos municipais:** O `HISTORICAL_MUNICIPALITY_RESULTS` tem votos absolutos por número de candidato. Quando converte para porcentagem, se os `candidate.number` não baterem, todos os votos vão para 0 e apenas um candidato (o primeiro) vence por padrão.
 
-6. NÃO altere o sistema de geração de imagens (html2canvas/PhotoCards.tsx) sem
-   necessidade — apenas se a Tarefa 3 exigir que o modo município também apareça nas fotos.
-   Se quiser, pode deixar isso como opcional/futuro.
+**O que fazer para corrigir:**
+1. **Adicione logging temporário** na função `handleImportHistoricalScenario` do `MunicipalityPaintModal.tsx` para ver:
+   - Quantos municípios estão sendo encontrados (`votes !== undefined`)
+   - Quais são os valores de `path.name` vs. os nomes normalizados esperados
+   - Se os `candidate.number` estão batendo com as chaves em `votesByNumber`
+2. **Melhore a normalização de nomes** em `normalizeHistoricalMunicipalityName`. Além de remover acentos e lowercase, também:
+   - Remova espaços extras no início/fim
+   - Substitua múltiplos espaços por um único
+   - Remova caracteres especiais como hífens, pontos
+   - Compare com `includes()` ou `startsWith()` como fallback se o match exato falhar
+3. **Garanta que o `candidate.number`** do array `candidates` passado para `getHistoricalMunicipalityCandidatePcts` seja uma **string** (não number). Nos dados históricos, as chaves são strings (`"17"`, `"13"`, etc.). Se `candidate.number` for `"17"` e a chave for `"17"`, funciona. Mas se houver tipo diferente (number vs string), o match falha.
+4. **Teste especificamente o cenário de 2018 2º turno** (Bolsonaro nº17 vs Haddad nº13). Confirme que ao importar o cenário no estado do Acre (AC), os municípios de Rio Branco, Cruzeiro do Sul, etc. recebem porcentagens diferentes.
+5. **Remove o logging temporário** após confirmar que funciona.
 
-7. Se encontrar que os cenários históricos estão definidos diretamente no código
-   (inline no componente), mova-os para um arquivo separado em src/data/ para
-   melhor organização — MAS apenas se isso não quebrar nada. Se estiver em arquivo
-   separado, modifique apenas esse arquivo.
+---
 
-===========================================================================
-RESUMO DO QUE DEVE SER ENTREGUE:
-===========================================================================
+### 📌 TAREFA 5: Menu de contexto (botão direito) ao editar municípios
 
-✅ Cenário histórico "1º Turno 2018" com as porcentagens corretas por estado (dados TSE reais)
-✅ Cenário histórico "2º Turno 2022" com as porcentagens corretas por estado (dados TSE reais)
-✅ Cenário histórico "2º Turno 2022" com os vencedores reais por município preenchidos
-✅ Toggle no mapa nacional para alternar entre visualização por estado e por município
-✅ Projeto buildando sem erros (npm run build) e sem erros TypeScript
+**Arquivos afetados:** `src/components/modals/MunicipalityPaintModal.tsx`
+
+**Problema:** Atualmente, no modal de pintura de municípios, o usuário só pode pintar clicando (botão esquerdo) para atribuir um candidato ao município. Não há como ver rapidamente o nome e porcentagem de cada município, nem editar a porcentagem diretamente.
+
+**O que fazer:**
+1. **Adicione um handler `onContextMenu`** em cada `<path>` de município no `MunicipalityPaintModal.tsx`. Atualmente, o SVG tem `onContextMenu={(event) => event.preventDefault()}`. Mude para abrir um menu flutuante.
+2. **O menu de contexto** deve aparecer na posição do cursor e conter:
+   - **Nome do município** (em negrito, no topo do menu)
+   - **Porcentagem por candidato:** Para cada candidato no cenário, mostrar:
+     - Nome do candidato (ou pelo menos partido/número)
+     - Porcentagem atual daquele município (se existir em `municipalities[path.code]`)
+     - Um **mini slider** ou **input numérico** para alterar a porcentagem
+   - **Indicação do vencedor atual** (municipality colored)
+   - **Botão "Limpar"** para resetar o município
+   - **Botão "Fechar"** ou fechar ao clicar fora
+3. **Estado do menu de contexto:** Adicione um estado como:
+   ```ts
+   const [municipalityContextMenu, setMunicipalityContextMenu] = useState<{
+     code: string;
+     name: string;
+     x: number;
+     y: number;
+   } | null>(null);
+   ```
+4. **Handler onContextMenu por município:**
+   ```ts
+   onContextMenu={(event) => {
+     event.preventDefault();
+     event.stopPropagation();
+     const rect = svgRef.current?.getBoundingClientRect();
+     if (!rect) return;
+     setMunicipalityContextMenu({
+       code: pathItem.code,
+       name: pathItem.name,
+       x: event.clientX - rect.left,
+       y: event.clientY - rect.top,
+     });
+   }}
+   ```
+5. **Fechar o menu** ao clicar fora ou ao pressionar Escape:
+   ```ts
+   // useEffect para listener de click/keydown
+   ```
+6. **Estilo do menu:** Siga o mesmo padrão visual do context menu que já existe no mapa principal (`ElectionSimulator.tsx` — procure por `contextMenu && contextStateInfo`): fundo escuro (`bg-slate-900/95`), bordas arredondadas, backdrop-blur, shadow, etc.
+7. **Ao alterar a porcentagem no mini slider/input:** Atualize o estado `municipalities[code]` com os novos valores. Garanta que as porcentagens somem 100% (ou redistribua proporcionalmente).
+
+---
+
+### 📌 TAREFA 6: [BUG FIX] Imagens dos candidatos de 2018 não carregam (problema CORS)
+
+**Arquivos afetados:** `src/data/presetCandidates.ts`, `src/components/photo/PhotoCards.tsx`
+
+**Problema documentado em `src/erro.txt`:** Várias imagens do Wikimedia Commons estão bloqueadas por CORS. O console mostra erros como:
+
+```
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at
+https://commons.wikimedia.org/wiki/Special:FilePath/...
+```
+
+Imagens afetadas incluem (mas não se limitam a):
+- `2022_SAMARA_MARTINS_CANDIDATO_VICE-PRESIDENTE_TSE_(280001602703).jpg`
+- `Fl%C3%A1vio_Bolsonaro.jpg`
+- `OOjs_UI_icon_userAvatar.svg` (placeholder)
+- `Romeu_Zema_2025_(cropped).jpg`
+- `Partido_Liberal_(Brazil)_logo.svg`
+- `Partido_Novo_logo_(2023).svg`
+- `Unidade_Popular_Logo.svg`
+- `Luiz-felipe-davila_retrato.jpg`
+
+**Análise do código atual:**
+
+O arquivo `PhotoCards.tsx` já tem um mecanismo de conversão de imagens para base64 antes da captura:
+
+1. `preloadImagesAsBase64()` — converte todas as `<img>` dentro do container para base64 antes de capturar.
+2. `resolveCaptureImageUrl()` — para URLs do Wikimedia (`commons.wikimedia.org/wiki/Special:`), faz uma chamada à API do Wikimedia (`/w/api.php?action=query&prop=imageinfo`) para obter a URL direta da imagem.
+3. Usa `fetch(resolvedUrl, { mode: "cors" })` para baixar e converter.
+
+**O problema:** Muitas URLs no `presetCandidates.ts` usam o formato direto do Wikimedia (`https://upload.wikimedia.org/...`) que **não** passam pelo `resolveCaptureImageUrl` (que só atua em URLs contendo `commons.wikimedia.org/wiki/Special:`). As URLs diretas do `upload.wikimedia.org` podem ter headers CORS restritivos, fazendo o fetch falhar.
+
+Além disso, algumas URLs usam o helper `commonsFile()` que gera URLs no formato `https://commons.wikimedia.org/wiki/Special:FilePath/...` — essas DEVEM passar pelo resolver, mas se o resolver falhar (timeout, erro na API), a imagem fica em branco.
+
+**O que fazer para corrigir:**
+
+1. **Unifique todas as URLs de imagem para usar o formato `commons.wikimedia.org/wiki/Special:FilePath/...`** em vez de URLs diretas do `upload.wikimedia.org`. No `presetCandidates.ts`, mude todas as URLs que usam o formato direto para usar a função `commonsFile()` que já existe no arquivo:
+
+   ```ts
+   const commonsFile = (fileName: string, width = 500) =>
+     `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(fileName)}?width=${width}`;
+   ```
+   
+   Por exemplo, mude:
+   ```ts
+   lula: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Lula_%282023%29_%28cropped%29.jpg/500px-Lula_%282023%29_%28cropped%29.jpg"
+   ```
+   Para:
+   ```ts
+   lula: commonsFile("Lula_(2023)_(cropped).jpg")
+   ```
+
+   Faça isso para TODAS as URLs em `CANDIDATE_IMAGES` e `PARTY_LOGOS` que usam URLs diretas do upload.wikimedia.org. O nome do arquivo é a parte após `/commons/thumb/.../` ou `/commons/.../`.
+
+2. **Melhore o `resolveCaptureImageUrl`** em `PhotoCards.tsx` para ser mais robusto:
+   - Adicione **timeout** de 5 segundos no fetch da API do Wikimedia
+   - Se a API falhar, tente montar a URL direta do thumbnail manualmente (formato: `https://upload.wikimedia.org/wikipedia/commons/thumb/HASH/FILENAME/WIDTHpx-FILENAME`)
+   - Como fallback final, retorne a URL original
+
+3. **Adicione tratamento de erro visual:** Se uma imagem de candidato não carregar (onerror no `<img>`), substitua por um placeholder com a inicial do nome ou número do candidato (como já é feito em alguns lugares).
+
+4. **Para as imagens que NUNCA funcionam via Wikimedia** (SVGs de logos que consistentemente falham CORS), considere hospedar como assets locais (arquivos na pasta `public/images/`) ou usar a API do Wikimedia de forma diferente (baixar e embutir como data URI no momento do build, ou usar um proxy).
+
+5. **Teste especificamente as imagens de 2018:** Bolsonaro 2018, Fernando Haddad, Hamilton Mourão, Manuela d'Ávila, e os logos do PSL e PT. Estas são as mais críticas para o cenário de 2018.
+
+---
+
+## INSTRUÇÕES GERAIS DE IMPLEMENTAÇÃO
+
+1. **Não quebre funcionalidades existentes.** Antes de cada alteração, entenda o código que já funciona. Teste mentalmente cada mudança.
+
+2. **Siga o padrão visual e de código existente:**
+   - Use Tailwind CSS para estilização
+   - Use `usePersistedState` do `src/hooks/usePersistedState.ts` para configurações que devem persistir
+   - Use `useMemo` para cálculos pesados (ranking, etc.)
+   - Mantenha o padrão de componentes com props tipadas em TypeScript
+
+3. **Cada modal de foto tem um padrão consistente** com controles no topo e área capturada abaixo. Siga esse padrão ao adicionar o layout 9:16.
+
+4. **Para a função de download**, use `savePhotoPng` (de `PhotoCards.tsx`) que já lida com conversão de imagens e fallback entre `html-to-image` e `html2canvas`.
+
+5. **Teste o build** com `npm run build` após todas as alterações. Corrija erros de TypeScript antes de finalizar.
+
+6. **Mensagens em português** para qualquer texto novo na interface.
+
+---
+
+## RESUMO DAS MUDANÇAS
+
+| # | Tarefa | Tipo | Prioridade |
+|---|--------|------|------------|
+| 1 | Aumentar zoom máximo do mapa nas fotos | Feature | Média |
+| 2 | Seletor de layout 16:9 / 9:16 no download | Feature | Alta |
+| 3 | Layout 9:16 (formato celular) para 2º turno | Feature | Alta |
+| 4 | Bug: importação de cenário histórico de municípios | Bug Fix | Crítica |
+| 5 | Menu de contexto (botão direito) em municípios | Feature | Alta |
+| 6 | Bug: imagens CORS de candidatos 2018 | Bug Fix | Alta |
+
+**Execute na ordem 4 → 6 → 1 → 2 → 3 → 5** (bugs primeiro, depois features em ordem de dependência).

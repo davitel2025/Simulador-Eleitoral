@@ -1,9 +1,14 @@
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import type { Candidate, RankedItem } from "../../types";
 import { formatPct } from "../../lib/utils";
 import { UserIcon } from "../UserIcon";
 
 export type PhotoCardShape = "circle" | "portrait";
+type PhotoTypographyProps = {
+  fontSizeBase?: number;
+  fontColor?: string;
+  useCandidateFontColor?: boolean;
+};
 
 // ─── Configuração do retângulo ao redor dos top candidatos ───────────────────
 export interface WinnerBoxConfig {
@@ -46,6 +51,7 @@ function CandidateImage({
   fallbackClassName?: string;
 }) {
   const [hasImageError, setHasImageError] = useState(false);
+  const resolvedSrc = useResolvedImageSrc(candidate.photo);
   if (!candidate.photo || hasImageError) {
     return (
       <div
@@ -58,12 +64,58 @@ function CandidateImage({
   }
   return (
     <img
-      src={candidate.photo}
+      src={resolvedSrc ?? candidate.photo}
       alt={candidate.name}
       className={className}
       crossOrigin="anonymous"
       referrerPolicy="no-referrer"
       onError={() => setHasImageError(true)}
+    />
+  );
+}
+
+function useResolvedImageSrc(src?: string): string | undefined {
+  const [resolvedSrc, setResolvedSrc] = useState(src);
+
+  useEffect(() => {
+    let active = true;
+    setResolvedSrc(src);
+    if (!src?.includes("commons.wikimedia.org/wiki/Special:")) return;
+    resolveCaptureImageUrl(src)
+      .then((nextSrc) => {
+        if (active) setResolvedSrc(nextSrc);
+      })
+      .catch(() => {
+        if (active) setResolvedSrc(src);
+      });
+    return () => {
+      active = false;
+    };
+  }, [src]);
+
+  return resolvedSrc;
+}
+
+function SafeImage({
+  src,
+  alt,
+  className,
+}: {
+  src: string;
+  alt: string;
+  className: string;
+}) {
+  const [hasError, setHasError] = useState(false);
+  const resolvedSrc = useResolvedImageSrc(src);
+  if (hasError) return null;
+  return (
+    <img
+      src={resolvedSrc ?? src}
+      alt={alt}
+      className={className}
+      crossOrigin="anonymous"
+      referrerPolicy="no-referrer"
+      onError={() => setHasError(true)}
     />
   );
 }
@@ -276,6 +328,9 @@ export function TopCandidateCard({
   shape = "circle",
   frameConfig,
   frameSurfaceColor = "#0f172a",
+  fontSizeBase = 14,
+  fontColor = "#ffffff",
+  useCandidateFontColor = false,
 }: {
   item: RankedItem;
   rank: number;
@@ -286,9 +341,10 @@ export function TopCandidateCard({
   shape?: PhotoCardShape;
   frameConfig?: WinnerBoxConfig;
   frameSurfaceColor?: string;
-}) {
+} & PhotoTypographyProps) {
   const { candidate, pct, votes } = item;
   const rankLabel = `${rank + 1}º colocado`;
+  const textColor = useCandidateFontColor ? candidate.color : fontColor;
 
   // Retrato: largura = 75% da altura
   const portraitH = portraitPx ?? Math.round(avatarPx * 1.18);
@@ -317,12 +373,10 @@ export function TopCandidateCard({
     >
       {candidate.partyLogo && (
         <div className="mb-3 h-10 w-auto flex items-center justify-center">
-          <img
+          <SafeImage
             src={candidate.partyLogo}
             alt={candidate.party}
             className="h-10 object-contain"
-            crossOrigin="anonymous"
-            referrerPolicy="no-referrer"
           />
         </div>
       )}
@@ -348,7 +402,7 @@ export function TopCandidateCard({
         </div>
       )}
 
-      <div className="text-3xl font-black mb-1" style={{ color: candidate.color }}>
+      <div className="font-black mb-1" style={{ color: textColor, fontSize: fontSizeBase * 2 }}>
         {candidate.name}
       </div>
       {showVice && candidate.vice && (
@@ -358,34 +412,32 @@ export function TopCandidateCard({
               className="h-8 w-8 overflow-hidden rounded-full border-2"
               style={{ borderColor: candidate.color }}
             >
-              <img
+              <SafeImage
                 src={candidate.vicePhoto}
                 alt={candidate.vice}
                 className="h-full w-full object-cover"
-                crossOrigin="anonymous"
-                referrerPolicy="no-referrer"
               />
             </div>
           )}
-          <div className="text-xs font-semibold text-slate-400">Vice: {candidate.vice}</div>
+          <div className="font-semibold" style={{ color: textColor, fontSize: fontSizeBase * 0.85 }}>Vice: {candidate.vice}</div>
         </div>
       )}
       {!candidate.partyLogo && (
-        <div className="text-xs font-bold text-slate-500 mb-2">{candidate.party}</div>
+        <div className="font-bold mb-2" style={{ color: textColor, fontSize: fontSizeBase * 0.85 }}>{candidate.party}</div>
       )}
       {candidate.ideology && (
-        <div className="mb-1 rounded-lg px-3 py-1 text-xs font-bold text-slate-400 bg-slate-800/50">
+        <div className="mb-1 rounded-lg px-3 py-1 font-bold bg-slate-800/50" style={{ color: textColor, fontSize: fontSizeBase * 0.8 }}>
           {candidate.ideology}
         </div>
       )}
       {candidate.coalition && (
-        <div className="mb-2 rounded-lg px-3 py-1 text-xs font-bold text-slate-500 bg-slate-800/30 max-w-[200px] leading-relaxed">
+        <div className="mb-2 rounded-lg px-3 py-1 font-bold bg-slate-800/30 max-w-[200px] leading-relaxed" style={{ color: textColor, fontSize: fontSizeBase * 0.78 }}>
           🤝 {candidate.coalition}
         </div>
       )}
-      <div className="text-6xl font-black text-white">{formatPct(pct)}</div>
+      <div className="font-black" style={{ color: textColor, fontSize: fontSizeBase * 4.2 }}>{formatPct(pct)}</div>
       {showVotes && votes !== undefined && (
-        <div className="mt-1 text-sm text-slate-500">
+        <div className="mt-1" style={{ color: textColor, fontSize: fontSizeBase }}>
           {Math.round(votes).toLocaleString("pt-BR")} votos
         </div>
       )}
@@ -400,14 +452,18 @@ export function BottomCandidateCard({
   item,
   avatarPx,
   showVotes = false,
+  fontSizeBase = 14,
+  fontColor = "#ffffff",
+  useCandidateFontColor = false,
 }: {
   item: RankedItem;
   avatarPx: number;
   showVotes?: boolean;
   /** shape ignorado — bottom cards são sempre circle */
   shape?: PhotoCardShape;
-}) {
+} & PhotoTypographyProps) {
   const { candidate, pct, votes } = item;
+  const textColor = useCandidateFontColor ? candidate.color : fontColor;
 
   return (
     <div
@@ -416,12 +472,10 @@ export function BottomCandidateCard({
     >
       {candidate.partyLogo && (
         <div className="mb-2 h-7 flex items-center justify-center">
-          <img
+          <SafeImage
             src={candidate.partyLogo}
             alt={candidate.party}
             className="h-7 object-contain"
-            crossOrigin="anonymous"
-            referrerPolicy="no-referrer"
           />
         </div>
       )}
@@ -438,23 +492,23 @@ export function BottomCandidateCard({
         />
       </div>
 
-      <div className="text-lg font-black mb-0.5" style={{ color: candidate.color }}>
+      <div className="font-black mb-0.5" style={{ color: textColor, fontSize: fontSizeBase * 1.3 }}>
         {candidate.name}
       </div>
       {!candidate.partyLogo && (
-        <div className="text-xs text-slate-500 mb-0.5">{candidate.party}</div>
+        <div className="mb-0.5" style={{ color: textColor, fontSize: fontSizeBase * 0.8 }}>{candidate.party}</div>
       )}
       {candidate.ideology && (
-        <div className="text-xs text-slate-400 mb-1">{candidate.ideology}</div>
+        <div className="mb-1" style={{ color: textColor, fontSize: fontSizeBase * 0.75 }}>{candidate.ideology}</div>
       )}
       {candidate.coalition && (
-        <div className="text-xs text-slate-500 mb-1 max-w-[160px] leading-snug">
+        <div className="mb-1 max-w-[160px] leading-snug" style={{ color: textColor, fontSize: fontSizeBase * 0.72 }}>
           🤝 {candidate.coalition}
         </div>
       )}
-      <div className="text-2xl font-black text-white">{formatPct(pct)}</div>
+      <div className="font-black" style={{ color: textColor, fontSize: fontSizeBase * 1.8 }}>{formatPct(pct)}</div>
       {showVotes && votes !== undefined && (
-        <div className="text-xs text-slate-500">{Math.round(votes).toLocaleString("pt-BR")}</div>
+        <div style={{ color: textColor, fontSize: fontSizeBase * 0.75 }}>{Math.round(votes).toLocaleString("pt-BR")}</div>
       )}
     </div>
   );
@@ -467,12 +521,14 @@ export function OthersCard({
   othersVotes,
   avatarPx,
   showVotes = false,
+  fontSizeBase = 14,
+  fontColor = "#ffffff",
 }: {
   othersPct: number;
   othersVotes?: number;
   avatarPx: number;
   showVotes?: boolean;
-}) {
+} & PhotoTypographyProps) {
   return (
     <div className="rounded-2xl border border-slate-600/40 bg-slate-900/40 p-4 text-center flex flex-col items-center">
       <div
@@ -481,11 +537,11 @@ export function OthersCard({
       >
         <UserIcon className="h-3/5 w-3/5 text-slate-400" />
       </div>
-      <div className="text-lg font-black mb-0.5 text-slate-300">Outros</div>
-      <div className="text-xs text-slate-500 mb-1">Demais candidatos</div>
-      <div className="text-2xl font-black text-white">{formatPct(othersPct)}</div>
+      <div className="font-black mb-0.5" style={{ color: fontColor, fontSize: fontSizeBase * 1.3 }}>Outros</div>
+      <div className="mb-1" style={{ color: fontColor, fontSize: fontSizeBase * 0.75 }}>Demais candidatos</div>
+      <div className="font-black" style={{ color: fontColor, fontSize: fontSizeBase * 1.8 }}>{formatPct(othersPct)}</div>
       {showVotes && othersVotes !== undefined && (
-        <div className="text-xs text-slate-500">{Math.round(othersVotes).toLocaleString("pt-BR")}</div>
+        <div style={{ color: fontColor, fontSize: fontSizeBase * 0.75 }}>{Math.round(othersVotes).toLocaleString("pt-BR")}</div>
       )}
     </div>
   );

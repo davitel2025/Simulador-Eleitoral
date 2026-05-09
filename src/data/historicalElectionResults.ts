@@ -29,10 +29,13 @@ export function getHistoricalMunicipalityCandidatePcts(
   const total = Object.values(votesByNumber).reduce((sum, votes) => sum + votes, 0);
   if (total <= 0) return undefined;
   const result: Record<CandidateId, number> = {};
+  let matchedTotal = 0;
   candidates.forEach((candidate) => {
     const votes = votesByNumber[candidate.number] ?? 0;
+    matchedTotal += votes;
     result[candidate.id] = (votes / total) * 100;
   });
+  if (matchedTotal <= 0) return undefined;
   return result;
 }
 
@@ -46,7 +49,7 @@ export function getHistoricalWinnerCandidateId(votes: Record<CandidateId, number
       winnerPct = pct;
     }
   });
-  return winner;
+  return winnerPct > 0 ? winner : null;
 }
 
 export function buildHistoricalStateResults(

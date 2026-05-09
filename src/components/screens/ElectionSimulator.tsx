@@ -12,7 +12,7 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import { REGIONS, STATES, STATE_BY_UF } from "../../data/states";
 import { STATE_GEO_URL, VIEWBOX_HEIGHT, VIEWBOX_WIDTH } from "../../lib/constants";
-import { getColorByWinnerPct, shadeHex } from "../../lib/color";
+import { getColorByWinnerPct, getMunicipalityFillColor, shadeHex } from "../../lib/color";
 import {
   buildRegionalMunicipalityPaths,
   buildStatePaths,
@@ -25,6 +25,7 @@ import {
   normalizeVotesForCandidates,
 } from "../../lib/utils";
 import {
+  HISTORICAL_MUNICIPALITY_RESULTS,
   getHistoricalMunicipalityCandidatePcts,
   getHistoricalWinnerCandidateId,
 } from "../../data/historicalElectionResults";
@@ -38,6 +39,7 @@ import type {
   StateInfo,
   StateResult,
   PoliticalScenario,
+  MunicipalityMapStyle,
 } from "../../types";
 import { CandidateManager } from "../CandidateManager";
 import { StateActionModal } from "../modals/StateActionModal";
@@ -71,6 +73,7 @@ type MunicipalityDataByUf = {
   municipalitiesByUf: Record<string, Record<string, Record<CandidateId, number>>>;
   paintByUf: Record<string, Record<string, CandidateId>>;
 };
+type HistoricalMunicipalityVotesByNumber = Record<string, Record<string, number>>;
 
 const DEFAULT_PHOTO_SCALE = 1.45;
 const DEFAULT_PHOTO_MAP_SCALE = 520;
@@ -86,6 +89,27 @@ const REGION_BORDER_COLORS: Record<RegionName, string> = {
   Sudeste: "#a855f7",
   Sul: "#ef4444",
 };
+const historicalStateValidVotesCache = new Map<string, number>();
+
+function getHistoricalValidVotesForState(
+  scenarioKey: PoliticalScenario["municipalityResultStrategy"],
+  uf: string
+): number | null {
+  if (!scenarioKey) return null;
+  const cacheKey = `${scenarioKey}:${uf}`;
+  const cached = historicalStateValidVotesCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+  const rows = (HISTORICAL_MUNICIPALITY_RESULTS as Record<string, HistoricalMunicipalityVotesByNumber>)[scenarioKey];
+  if (!rows) return null;
+  const prefix = `${uf}:`;
+  let total = 0;
+  Object.entries(rows).forEach(([key, votes]) => {
+    if (!key.startsWith(prefix)) return;
+    total += Object.values(votes).reduce((sum, value) => sum + value, 0);
+  });
+  historicalStateValidVotesCache.set(cacheKey, total);
+  return total;
+}
 
 function getTouchPoint(touch: ReactTouch, rect: DOMRect): Point {
   return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
@@ -114,6 +138,24 @@ function getVotersForState(
   if (scenario?.customStates) {
     const custom = scenario.customStates.find((cs) => cs.uf === state.uf);
     if (custom) return custom.voters;
+  }
+  const historicalTotal = getHistoricalValidVotesForState(
+    scenario?.municipalityResultStrategy,
+    state.uf
+  );
+  if (historicalTotal !== null && historicalTotal > 0) return historicalTotal;
+  const base = scenario?.year === 2018
+    ? state.voters2018
+    : scenario?.year === 2022
+      ? state.voters2022
+      : state.voters;
+  if (scenario?.nationalVoters) {
+    const baseTotal = STATES.reduce((sum, current) => {
+      if (scenario.year === 2018) return sum + current.voters2018;
+      if (scenario.year === 2022) return sum + current.voters2022;
+      return sum + current.voters;
+    }, 0);
+    return baseTotal > 0 ? Math.round((base / baseTotal) * scenario.nationalVoters) : base;
   }
   if (scenario?.year === 2018) return state.voters2018;
   if (scenario?.year === 2022) return state.voters2022;
@@ -194,6 +236,8 @@ export function ElectionSimulator({
       "eleitoral_municipality_color_mode",
       "percentage"
     );
+  const [municipalityMapStyle, setMunicipalityMapStyle] =
+    usePersistedState<MunicipalityMapStyle>("municipalityMapStyle", "original");
   const [nationalPhotoScale, setNationalPhotoScale] = usePersistedState(
     "eleitoral_nfoto_photoScale",
     DEFAULT_PHOTO_SCALE
@@ -696,6 +740,42 @@ export function ElectionSimulator({
         totalVotes > 0 ? (candidateVotes[numId] / totalVotes) * 100 : 0;
     });
 
+    const canUseNationalOverride =
+      loadedScenario?.nationalResults &&
+      loadedScenario?.results &&
+      statesCounted === activeStates.length &&
+      activeStates.every((state) => {
+        const result = results[state.uf];
+        const source = loadedScenario.results?.[state.uf];
+        if (!result || !source || result.excluded) return false;
+        const sourceTotal = Object.values(source).reduce((sum, value) => sum + value, 0);
+        return candidates.every((candidate, index) =>
+          Math.abs(
+            (result.votes[candidate.id] ?? 0) -
+            (sourceTotal > 0 ? ((source[index + 1] ?? 0) / sourceTotal) * 100 : 0)
+          ) < 0.001
+        );
+      });
+
+    if (canUseNationalOverride) {
+      const overrideTotal = loadedScenario.nationalVoters ?? totalVotes;
+      const overrideVotes: Record<CandidateId, number> = {};
+      const overridePcts: Record<CandidateId, number> = {};
+      candidates.forEach((candidate, index) => {
+        const pct = loadedScenario.nationalResults?.[index + 1] ?? 0;
+        overridePcts[candidate.id] = pct;
+        overrideVotes[candidate.id] = (pct / 100) * overrideTotal;
+      });
+      return {
+        candidateVotes: overrideVotes,
+        candidatePcts: overridePcts,
+        totalVotes: overrideTotal,
+        totalVoters,
+        statesCounted,
+        winner: getWinner(overridePcts),
+      };
+    }
+
     return {
       candidateVotes,
       candidatePcts,
@@ -716,6 +796,10 @@ export function ElectionSimulator({
     () => Object.fromEntries(candidates.map((c) => [c.id, c])),
     [candidates]
   );
+  const candidateIndexById = useMemo(
+    () => Object.fromEntries(candidates.map((candidate, index) => [candidate.id, index])),
+    [candidates]
+  ) as Record<CandidateId, number>;
 
   const getStateFill = (uf: string): string => {
     if (activeStates.length < STATES.length && !activeStates.find((s) => s.uf === uf)) {
@@ -1325,22 +1409,40 @@ export function ElectionSimulator({
               {mapMunicipalityMode ? "Por estado" : "Por município"}
             </button>
             {mapMunicipalityMode && (
-              <button
-                type="button"
-                onClick={() =>
-                  setMunicipalityColorMode((prev) =>
-                    prev === "percentage" ? "winner" : "percentage"
-                  )
-                }
-                className={`rounded-xl border px-4 py-2.5 text-sm font-semibold shadow-lg transition-all ${
-                  municipalityColorMode === "percentage"
-                    ? "border-emerald-300/60 bg-emerald-400/20 text-emerald-100"
-                    : "border-white/15 bg-slate-800/70 text-slate-200 hover:bg-slate-700"
-                }`}
-                title="Alternar municípios entre cor chapada e intensidade por percentual"
-              >
-                {municipalityColorMode === "percentage" ? "Com porcentagem" : "Sem porcentagem"}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setMunicipalityColorMode((prev) =>
+                      prev === "percentage" ? "winner" : "percentage"
+                    )
+                  }
+                  className={`rounded-xl border px-4 py-2.5 text-sm font-semibold shadow-lg transition-all ${
+                    municipalityColorMode === "percentage"
+                      ? "border-emerald-300/60 bg-emerald-400/20 text-emerald-100"
+                      : "border-white/15 bg-slate-800/70 text-slate-200 hover:bg-slate-700"
+                  }`}
+                  title="Alternar municípios entre cor chapada e intensidade por percentual"
+                >
+                  {municipalityColorMode === "percentage" ? "Com porcentagem" : "Sem porcentagem"}
+                </button>
+                <div className="flex rounded-xl border border-white/10 bg-slate-900/80 p-1 shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => setMunicipalityMapStyle("original")}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-black ${municipalityMapStyle === "original" ? "bg-violet-600 text-white" : "text-slate-300"}`}
+                  >
+                    Original
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMunicipalityMapStyle("broadcast")}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-black ${municipalityMapStyle === "broadcast" ? "bg-violet-600 text-white" : "text-slate-300"}`}
+                  >
+                    Broadcast
+                  </button>
+                </div>
+              </>
             )}
             <button
               type="button"
@@ -1845,6 +1947,12 @@ export function ElectionSimulator({
                         <stop offset="0%" stopColor={mapTheme === "light" ? "#f8fafc" : "#1e293b"} />
                         <stop offset="100%" stopColor={mapTheme === "light" ? "#cbd5e1" : "#334155"} />
                       </linearGradient>
+                      <filter id="municipalBroadcastGlow" x="-8%" y="-8%" width="116%" height="116%">
+                        <feGaussianBlur in="SourceAlpha" stdDeviation="1.1" result="blur" />
+                        <feComposite in="blur" in2="SourceAlpha" operator="out" result="edge" />
+                        <feColorMatrix in="edge" type="matrix" values="0 0 0 0 0.58 0 0 0 0 0.68 0 0 0 0 0.82 0 0 0 0.45 0" result="glow" />
+                        <feBlend in="SourceGraphic" in2="glow" mode="screen" />
+                      </filter>
                       <pattern
                         id="unresolvedStatePattern"
                         width="10"
@@ -1871,7 +1979,11 @@ export function ElectionSimulator({
                         );
                       })}
                     </defs>
-                    <rect width={VIEWBOX_WIDTH} height={VIEWBOX_HEIGHT} fill="url(#mapOceanGradient)" />
+                    <rect
+                      width={VIEWBOX_WIDTH}
+                      height={VIEWBOX_HEIGHT}
+                      fill={mapMunicipalityMode && municipalityMapStyle === "broadcast" ? "#0f172a" : "url(#mapOceanGradient)"}
+                    />
                     <rect width={VIEWBOX_WIDTH} height={VIEWBOX_HEIGHT} fill="url(#mapGridPattern)" />
                     {mapMunicipalityMode ? activeMunicipalityPaths.map((pathItem) => {
                       const result = results[pathItem.uf];
@@ -1879,6 +1991,7 @@ export function ElectionSimulator({
                       const winner = winnerId ? candidateById[winnerId] : null;
                       const municipalityVotes = result?.municipalities?.[pathItem.code];
                       const winnerPct = winnerId ? municipalityVotes?.[winnerId] ?? 55 : 0;
+                      const winnerIndex = winnerId ? candidateIndexById[winnerId] ?? 0 : 0;
                       const stateInfo = STATE_BY_UF[pathItem.uf];
                       return (
                         <path
@@ -1886,13 +1999,18 @@ export function ElectionSimulator({
                           d={pathItem.d}
                           fill={
                             winner
-                              ? municipalityColorMode === "percentage"
-                                ? getColorByWinnerPct(winner.color, winnerPct)
-                                : winner.color
+                              ? getMunicipalityFillColor({
+                                  baseColor: winner.color,
+                                  winnerPct,
+                                  candidateIndex: winnerIndex,
+                                  shadeByPct: municipalityColorMode === "percentage",
+                                  mapStyle: municipalityMapStyle,
+                                })
                               : mapTheme === "light" ? "#e2e8f0" : "#1e293b"
                           }
-                          stroke={mapTheme === "light" ? "#94a3b8" : "#0f172a"}
-                          strokeWidth={0.25 / mapZoom}
+                          stroke={municipalityMapStyle === "broadcast" ? "#94a3b8" : mapTheme === "light" ? "#94a3b8" : "#0f172a"}
+                          strokeWidth={(municipalityMapStyle === "broadcast" ? 0.3 : 0.25) / mapZoom}
+                          filter={municipalityMapStyle === "broadcast" ? "url(#municipalBroadcastGlow)" : undefined}
                           className="pointer-events-auto cursor-crosshair transition-colors duration-150 hover:brightness-125"
                           style={{
                             opacity:
