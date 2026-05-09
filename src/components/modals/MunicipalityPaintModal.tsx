@@ -1,23 +1,50 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { VIEWBOX_HEIGHT, VIEWBOX_WIDTH } from "../../lib/constants";
-import { shadeHex } from "../../lib/color";
+import { getColorByWinnerPct, shadeHex } from "../../lib/color";
 import { buildMunicipalityPaths, fetchMunicipalityGeo } from "../../lib/geo";
-import type { Candidate, CandidateId, MunicipalityPath, StateInfo } from "../../types";
+import {
+  getHistoricalMunicipalityCandidatePcts,
+  getHistoricalWinnerCandidateId,
+} from "../../data/historicalElectionResults";
+import type {
+  Candidate,
+  CandidateId,
+  HistoricalMunicipalityScenarioKey,
+  MunicipalityPath,
+  StateInfo,
+} from "../../types";
 
-export function MunicipalityPaintModal({ stateInfo, candidates, initialPaint, onClose, onSave }: {
+export function MunicipalityPaintModal({
+  stateInfo,
+  candidates,
+  initialPaint,
+  initialMunicipalities,
+  scenarioKey,
+  onClose,
+  onSave,
+}: {
   stateInfo: StateInfo;
   candidates: Candidate[];
   initialPaint: Record<string, CandidateId>;
+  initialMunicipalities: Record<string, Record<CandidateId, number>>;
+  scenarioKey?: HistoricalMunicipalityScenarioKey;
   onClose: () => void;
-  onSave: (paint: Record<string, CandidateId>) => void;
+  onSave: (
+    paint: Record<string, CandidateId>,
+    municipalities: Record<string, Record<CandidateId, number>>
+  ) => void;
 }) {
   const [paths, setPaths] = useState<MunicipalityPath[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCandidate, setSelectedCandidate] = useState<CandidateId | null>(candidates[0]?.id ?? null);
   const [paint, setPaint] = useState<Record<string, CandidateId>>(initialPaint);
+  const [municipalities, setMunicipalities] =
+    useState<Record<string, Record<CandidateId, number>>>(initialMunicipalities);
+  const [shadeByPct, setShadeByPct] = useState(true);
   const [fillAllCandidate, setFillAllCandidate] = useState<CandidateId | null>(null);
   const isPaintingRef = useRef(false);
+  const canImportHistoricalScenario = scenarioKey === "2018" || scenarioKey === "2022";
 
   useEffect(() => {
     let active = true;
@@ -56,6 +83,16 @@ export function MunicipalityPaintModal({ stateInfo, candidates, initialPaint, on
       next[municipalityCode] = selectedCandidate;
       return next;
     });
+    setMunicipalities((prev) => {
+      const next = { ...prev };
+      if (!selectedCandidate) {
+        delete next[municipalityCode];
+        return next;
+      }
+      if (prev[municipalityCode]?.[selectedCandidate]) return prev;
+      delete next[municipalityCode];
+      return next;
+    });
   };
 
   const handleFillAll = () => {
@@ -65,6 +102,27 @@ export function MunicipalityPaintModal({ stateInfo, candidates, initialPaint, on
       newPaint[path.code] = fillAllCandidate;
     });
     setPaint(newPaint);
+    setMunicipalities({});
+  };
+
+  const handleImportHistoricalScenario = () => {
+    if (!scenarioKey || !canImportHistoricalScenario || !paths.length) return;
+    const nextPaint: Record<string, CandidateId> = {};
+    const nextMunicipalities: Record<string, Record<CandidateId, number>> = {};
+    paths.forEach((path) => {
+      const votes = getHistoricalMunicipalityCandidatePcts(
+        scenarioKey,
+        stateInfo.uf,
+        path.name,
+        candidates
+      );
+      const winner = getHistoricalWinnerCandidateId(votes);
+      if (!votes || !winner) return;
+      nextPaint[path.code] = winner;
+      nextMunicipalities[path.code] = votes;
+    });
+    setPaint(nextPaint);
+    setMunicipalities(nextMunicipalities);
   };
 
   const handleMunicipalityMouseDown = (municipalityCode: string, event: React.MouseEvent) => {
@@ -94,7 +152,7 @@ export function MunicipalityPaintModal({ stateInfo, candidates, initialPaint, on
             <p className="text-sm text-slate-400">Selecione um candidato e clique (ou segure e arraste) sobre os municípios para colorir.</p>
           </div>
           <div className="flex gap-2">
-            <button type="button" onClick={() => onSave(paint)} className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-black text-zinc-950">Salvar municípios</button>
+            <button type="button" onClick={() => onSave(paint, municipalities)} className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-black text-zinc-950">Salvar municípios</button>
             <button type="button" onClick={onClose} className="rounded-xl border border-white/15 px-4 py-2 text-sm font-bold text-white">Fechar</button>
           </div>
         </div>
@@ -118,9 +176,28 @@ export function MunicipalityPaintModal({ stateInfo, candidates, initialPaint, on
           >
             Borracha
           </button>
-          <button type="button" onClick={() => setPaint({})} className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs font-black text-red-300">
+          <button type="button" onClick={() => { setPaint({}); setMunicipalities({}); }} className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs font-black text-red-300">
             Limpar pintura
           </button>
+          <button
+            type="button"
+            onClick={() => setShadeByPct((prev) => !prev)}
+            className={`rounded-xl border px-3 py-2 text-xs font-black transition-all ${
+              shadeByPct ? "border-emerald-400/60 bg-emerald-500/15 text-emerald-200" : "border-slate-600 text-slate-300"
+            }`}
+          >
+            {shadeByPct ? "Com porcentagem" : "Sem porcentagem"}
+          </button>
+          {canImportHistoricalScenario && (
+            <button
+              type="button"
+              onClick={handleImportHistoricalScenario}
+              disabled={loading || paths.length === 0}
+              className="rounded-xl border border-cyan-400/50 bg-cyan-500/10 px-3 py-2 text-xs font-black text-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Importar cenário {scenarioKey === "2022" ? "2022" : "2018"}
+            </button>
+          )}
         </div>
 
         <div className="mb-4 rounded-xl border border-white/10 bg-slate-900/60 p-4">
@@ -166,11 +243,12 @@ export function MunicipalityPaintModal({ stateInfo, candidates, initialPaint, on
             >
               {paths.map((pathItem) => {
                 const candidate = candidateById[paint[pathItem.code]];
+                const candidatePct = candidate ? municipalities[pathItem.code]?.[candidate.id] ?? 55 : 0;
                 return (
                   <path
                     key={pathItem.code}
                     d={pathItem.d}
-                    fill={candidate ? candidate.color : "#0f172a"}
+                    fill={candidate ? (shadeByPct ? getColorByWinnerPct(candidate.color, candidatePct) : candidate.color) : "#0f172a"}
                     stroke={candidate ? shadeHex(candidate.color, 0.3, "black") : "#1f2937"}
                     strokeWidth={0.7}
                     className="cursor-pointer transition-colors duration-150 hover:brightness-125"

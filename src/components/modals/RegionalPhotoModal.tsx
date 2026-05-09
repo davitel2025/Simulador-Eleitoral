@@ -20,7 +20,7 @@ import {
   type WinnerBoxConfig,
 } from "../photo/PhotoCards";
 import { RegionalMapCenter, RegionalMunicipalityMapCenter } from "../photo/MapCenters";
-import type { Candidate, CandidateId, PathData, RegionName, StateResult } from "../../types";
+import type { Candidate, CandidateId, HistoricalMunicipalityScenarioKey, PathData, RegionName, StateResult } from "../../types";
 import {
   clearPersistedStateByPrefix,
   usePersistedState,
@@ -40,7 +40,7 @@ interface RegionalPhotoSettings {
   winnerBox: WinnerBoxConfig;
 }
 
-export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, stateGeoData, results, photoScale, photoMapScale, candidateById, onClose, scenarioYear, useOfficialMunicipalityResults }: {
+export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, stateGeoData, results, photoScale, photoMapScale, candidateById, onClose, scenarioYear, municipalityScenarioKey }: {
   region: RegionName;
   onRegionChange: (region: RegionName) => void;
   candidates: Candidate[];
@@ -52,7 +52,7 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
   candidateById: Record<number, Candidate>;
   onClose: () => void;
   scenarioYear?: number;
-  useOfficialMunicipalityResults?: boolean;
+  municipalityScenarioKey?: HistoricalMunicipalityScenarioKey;
 }) {
   const captureRef = useRef<HTMLDivElement>(null);
   const defaultSettings = useMemo<RegionalPhotoSettings>(
@@ -278,7 +278,8 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
                 results={results}
                 candidateById={candidateById}
                 mapSizePx={localMapScale}
-                useOfficialMunicipalityResults={useOfficialMunicipalityResults}
+                municipalityScenarioKey={municipalityScenarioKey}
+                shadeMunicipalitiesByPct={true}
               />
             ) : (
               <RegionalMapCenter regionPaths={mapPaths} results={results} candidateById={candidateById} mapSizePx={localMapScale} />

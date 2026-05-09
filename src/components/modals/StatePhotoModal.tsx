@@ -17,7 +17,7 @@ import {
   type WinnerBoxConfig,
 } from "../photo/PhotoCards";
 import { StateMapCenter } from "../photo/MapCenters";
-import type { Candidate, StateInfo, StateResult } from "../../types";
+import type { Candidate, HistoricalMunicipalityScenarioKey, StateInfo, StateResult } from "../../types";
 import {
   clearPersistedStateByPrefix,
   usePersistedState,
@@ -37,7 +37,7 @@ interface StatePhotoSettings {
   winnerBox: WinnerBoxConfig;
 }
 
-export function StatePhotoModal({ stateInfo, candidates, result, photoScale, photoMapScale, onClose, scenarioYear }: {
+export function StatePhotoModal({ stateInfo, candidates, result, photoScale, photoMapScale, onClose, scenarioYear, municipalityScenarioKey }: {
   stateInfo: StateInfo;
   candidates: Candidate[];
   result?: StateResult;
@@ -45,6 +45,7 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
   photoMapScale: number;
   onClose: () => void;
   scenarioYear?: number;
+  municipalityScenarioKey?: HistoricalMunicipalityScenarioKey;
 }) {
   const captureRef = useRef<HTMLDivElement>(null);
   const defaultSettings = useMemo<StatePhotoSettings>(
@@ -237,7 +238,11 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
               mapSizePx={localMapScale}
               showMunicipalityPaint={showMunicipalityPaint}
               municipalityPaint={result?.municipalityPaint ?? {}}
+              municipalityVotes={result?.municipalities ?? {}}
               candidateById={candidateById}
+              candidates={candidates}
+              municipalityScenarioKey={municipalityScenarioKey}
+              shadeMunicipalitiesByPct={true}
             />
             {ranked.second && (
               <div className="flex-1 min-w-[220px]">

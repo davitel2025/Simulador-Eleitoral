@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { STATES } from "../../data/states";
-import { getMunicipalityResult2022 } from "../../data/municipalityResults2022";
+import {
+  getHistoricalMunicipalityCandidatePcts,
+  getHistoricalWinnerCandidateId,
+} from "../../data/historicalElectionResults";
 import { VIEWBOX_HEIGHT, VIEWBOX_WIDTH } from "../../lib/constants";
 import { getColorByWinnerPct, shadeHex } from "../../lib/color";
 import {
@@ -11,6 +14,7 @@ import {
 import type {
   Candidate,
   CandidateId,
+  HistoricalMunicipalityScenarioKey,
   MunicipalityPath,
   PathData,
   RegionName,
@@ -20,14 +24,21 @@ import type {
 } from "../../types";
 
 export function NationalMapCenter({
-  paths, results, candidateById, mapSizePx, showMunicipalities = false, useOfficialMunicipalityResults = false,
+  paths,
+  results,
+  candidateById,
+  mapSizePx,
+  showMunicipalities = false,
+  municipalityScenarioKey,
+  shadeMunicipalitiesByPct = true,
 }: {
   paths: PathData[];
   results: Record<string, StateResult>;
   candidateById: Record<number, Candidate>;
   mapSizePx: number;
   showMunicipalities?: boolean;
-  useOfficialMunicipalityResults?: boolean;
+  municipalityScenarioKey?: HistoricalMunicipalityScenarioKey;
+  shadeMunicipalitiesByPct?: boolean;
 }) {
   const [municipalityPaths, setMunicipalityPaths] = useState<RegionalMunicipalityPath[]>([]);
   const [loadingMunicipalities, setLoadingMunicipalities] = useState(false);
@@ -83,33 +94,24 @@ export function NationalMapCenter({
       >
         {showMunicipalities && municipalityPaths.length > 0 ? municipalityPaths.map((pathItem) => {
           const stateResult = results[pathItem.uf];
-          const exactResult = useOfficialMunicipalityResults ? getMunicipalityResult2022(pathItem.uf, pathItem.name) : undefined;
-          const lulaCandidate =
-            Object.values(candidateById).find((candidate) => candidate.party.toUpperCase() === "PT" && candidate.number === "13");
-          const bolsonaroCandidate =
-            Object.values(candidateById).find((candidate) => candidate.party.toUpperCase() === "PL" && candidate.number === "22");
-          const totalExactVotes = (exactResult?.lulaVotes ?? 0) + (exactResult?.bolsonaroVotes ?? 0);
-          const exactVotes =
-            exactResult && lulaCandidate && bolsonaroCandidate && totalExactVotes > 0
-              ? {
-                  [lulaCandidate.id]: (exactResult.lulaVotes / totalExactVotes) * 100,
-                  [bolsonaroCandidate.id]: (exactResult.bolsonaroVotes / totalExactVotes) * 100,
-                }
-              : undefined;
-          const exactWinner =
-            exactResult && lulaCandidate && bolsonaroCandidate
-              ? exactResult.lulaVotes > exactResult.bolsonaroVotes
-                ? lulaCandidate.id
-                : bolsonaroCandidate.id
-              : undefined;
-          const winnerId = stateResult?.municipalityPaint?.[pathItem.code] ?? exactWinner;
-          const municipalityVotes = stateResult?.municipalities?.[pathItem.code] ?? exactVotes;
+          const candidates = Object.values(candidateById);
+          const officialVotes = getHistoricalMunicipalityCandidatePcts(
+            municipalityScenarioKey,
+            pathItem.uf,
+            pathItem.name,
+            candidates
+          );
+          const officialWinner = getHistoricalWinnerCandidateId(officialVotes);
+          const winnerId = stateResult?.municipalityPaint?.[pathItem.code] ?? officialWinner;
+          const municipalityVotes = stateResult?.municipalities?.[pathItem.code] ?? officialVotes;
           const winner = winnerId ? candidateById[winnerId] : null;
           const pct = winnerId ? municipalityVotes?.[winnerId] ?? 55 : 0;
           const stateWinner = stateResult?.winner ? candidateById[stateResult.winner] : null;
           const statePct = stateResult?.winner ? stateResult.votes[stateResult.winner] : 0;
           const fill = winner
-            ? getColorByWinnerPct(winner.color, pct)
+            ? shadeMunicipalitiesByPct
+              ? getColorByWinnerPct(winner.color, pct)
+              : winner.color
             : stateWinner
               ? getColorByWinnerPct(stateWinner.color, statePct)
               : "#0f172a";
@@ -163,13 +165,19 @@ export function RegionalMapCenter({
 }
 
 export function RegionalMunicipalityMapCenter({
-  region, results, candidateById, mapSizePx, useOfficialMunicipalityResults = false,
+  region,
+  results,
+  candidateById,
+  mapSizePx,
+  municipalityScenarioKey,
+  shadeMunicipalitiesByPct = true,
 }: {
   region: RegionName;
   results: Record<string, StateResult>;
   candidateById: Record<number, Candidate>;
   mapSizePx: number;
-  useOfficialMunicipalityResults?: boolean;
+  municipalityScenarioKey?: HistoricalMunicipalityScenarioKey;
+  shadeMunicipalitiesByPct?: boolean;
 }) {
   const [paths, setPaths] = useState<RegionalMunicipalityPath[]>([]);
   const [loading, setLoading] = useState(true);
@@ -220,23 +228,24 @@ export function RegionalMunicipalityMapCenter({
       >
         {paths.map((pathItem) => {
           const stateResult = results[pathItem.uf];
-          const exactResult = useOfficialMunicipalityResults ? getMunicipalityResult2022(pathItem.uf, pathItem.name) : undefined;
-          const lulaCandidate =
-            Object.values(candidateById).find((candidate) => candidate.party.toUpperCase() === "PT" && candidate.number === "13");
-          const bolsonaroCandidate =
-            Object.values(candidateById).find((candidate) => candidate.party.toUpperCase() === "PL" && candidate.number === "22");
-          const exactWinner =
-            exactResult && lulaCandidate && bolsonaroCandidate
-              ? exactResult.lulaVotes > exactResult.bolsonaroVotes
-                ? lulaCandidate.id
-                : bolsonaroCandidate.id
-              : undefined;
-          const paintedId = stateResult?.municipalityPaint?.[pathItem.code] ?? exactWinner;
+          const candidates = Object.values(candidateById);
+          const officialVotes = getHistoricalMunicipalityCandidatePcts(
+            municipalityScenarioKey,
+            pathItem.uf,
+            pathItem.name,
+            candidates
+          );
+          const officialWinner = getHistoricalWinnerCandidateId(officialVotes);
+          const paintedId = stateResult?.municipalityPaint?.[pathItem.code] ?? officialWinner;
+          const municipalityVotes = stateResult?.municipalities?.[pathItem.code] ?? officialVotes;
           const paintedCandidate = paintedId ? candidateById[paintedId] : null;
+          const pct = paintedId ? municipalityVotes?.[paintedId] ?? 55 : 0;
           let fill = "#0f172a";
           let stroke = "#1e293b";
           if (paintedCandidate) {
-            fill = paintedCandidate.color;
+            fill = shadeMunicipalitiesByPct
+              ? getColorByWinnerPct(paintedCandidate.color, pct)
+              : paintedCandidate.color;
             stroke = shadeHex(paintedCandidate.color, 0.35, "black");
           } else if (stateResult?.winner) {
             const winner = candidateById[stateResult.winner];
@@ -256,7 +265,17 @@ export function RegionalMunicipalityMapCenter({
 }
 
 export function StateMapCenter({
-  stateInfo, winnerColor, winnerPct, mapSizePx, showMunicipalityPaint, municipalityPaint, candidateById,
+  stateInfo,
+  winnerColor,
+  winnerPct,
+  mapSizePx,
+  showMunicipalityPaint,
+  municipalityPaint,
+  municipalityVotes,
+  candidateById,
+  candidates = [],
+  municipalityScenarioKey,
+  shadeMunicipalitiesByPct = true,
 }: {
   stateInfo: StateInfo;
   winnerColor: string | null;
@@ -264,7 +283,11 @@ export function StateMapCenter({
   mapSizePx: number;
   showMunicipalityPaint: boolean;
   municipalityPaint: Record<string, CandidateId>;
+  municipalityVotes?: Record<string, Record<CandidateId, number>>;
   candidateById: Record<number, Candidate>;
+  candidates?: Candidate[];
+  municipalityScenarioKey?: HistoricalMunicipalityScenarioKey;
+  shadeMunicipalitiesByPct?: boolean;
 }) {
   const [municipalityPaths, setMunicipalityPaths] = useState<MunicipalityPath[]>([]);
   const [loading, setLoading] = useState(true);
@@ -301,9 +324,21 @@ export function StateMapCenter({
       >
         {municipalityPaths.length > 0 ? (
           municipalityPaths.map((pathItem) => {
-            const paintedCandidate = candidateById[municipalityPaint[pathItem.code]];
+            const officialVotes = getHistoricalMunicipalityCandidatePcts(
+              municipalityScenarioKey,
+              stateInfo.uf,
+              pathItem.name,
+              candidates
+            );
+            const officialWinner = getHistoricalWinnerCandidateId(officialVotes);
+            const paintedId = municipalityPaint[pathItem.code] ?? officialWinner;
+            const paintedCandidate = candidateById[paintedId];
+            const pathVotes = municipalityVotes?.[pathItem.code] ?? officialVotes;
+            const paintedPct = paintedId ? pathVotes?.[paintedId] ?? 55 : 0;
             const fill = showMunicipalityPaint && paintedCandidate
-              ? paintedCandidate.color
+              ? shadeMunicipalitiesByPct
+                ? getColorByWinnerPct(paintedCandidate.color, paintedPct)
+                : paintedCandidate.color
               : fallbackFill;
             const stroke = showMunicipalityPaint
               ? (paintedCandidate ? shadeHex(paintedCandidate.color, 0.35, "black") : "#1e293b")

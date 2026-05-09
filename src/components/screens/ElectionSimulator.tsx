@@ -24,7 +24,10 @@ import {
   getWinner,
   normalizeVotesForCandidates,
 } from "../../lib/utils";
-import { getMunicipalityResult2022 } from "../../data/municipalityResults2022";
+import {
+  getHistoricalMunicipalityCandidatePcts,
+  getHistoricalWinnerCandidateId,
+} from "../../data/historicalElectionResults";
 import type {
   Candidate,
   CandidateId,
@@ -57,6 +60,7 @@ type MapTooltip = {
 };
 type MapContextMenu = { uf: string; x: number; y: number } | null;
 type MapTheme = "dark" | "light";
+type MunicipalityColorMode = "winner" | "percentage";
 type PinchState = {
   distance: number;
   midpoint: Point;
@@ -185,6 +189,11 @@ export function ElectionSimulator({
     "eleitoral_map_theme",
     "dark"
   );
+  const [municipalityColorMode, setMunicipalityColorMode] =
+    usePersistedState<MunicipalityColorMode>(
+      "eleitoral_municipality_color_mode",
+      "percentage"
+    );
   const [nationalPhotoScale, setNationalPhotoScale] = usePersistedState(
     "eleitoral_nfoto_photoScale",
     DEFAULT_PHOTO_SCALE
@@ -416,34 +425,23 @@ export function ElectionSimulator({
   const buildMunicipalityDataByUf = useCallback(
     (items: RegionalMunicipalityPath[]) => {
       const empty: MunicipalityDataByUf = { municipalitiesByUf: {}, paintByUf: {} };
-      if (loadedScenario?.municipalityResultStrategy !== "tse-2022") {
+      const scenarioKey = loadedScenario?.municipalityResultStrategy;
+      if (!scenarioKey) {
         return empty;
       }
-
-      const lulaCandidate =
-        candidates.find((candidate) => candidate.party.toUpperCase() === "PT" && candidate.number === "13") ??
-        candidates[0];
-      const bolsonaroCandidate =
-        candidates.find((candidate) => candidate.party.toUpperCase() === "PL" && candidate.number === "22") ??
-        candidates[1];
-      if (!lulaCandidate || !bolsonaroCandidate) return empty;
 
       const municipalitiesByUf: Record<string, Record<string, Record<CandidateId, number>>> = {};
       const paintByUf: Record<string, Record<string, CandidateId>> = {};
 
       items.forEach((item) => {
-        const result = getMunicipalityResult2022(item.uf, item.name);
-        if (!result) return;
-        const total = result.lulaVotes + result.bolsonaroVotes;
-        if (total <= 0) return;
-        const municipalityVotes = {
-          [lulaCandidate.id]: (result.lulaVotes / total) * 100,
-          [bolsonaroCandidate.id]: (result.bolsonaroVotes / total) * 100,
-        };
-        const winner =
-          result.lulaVotes > result.bolsonaroVotes
-            ? lulaCandidate.id
-            : bolsonaroCandidate.id;
+        const municipalityVotes = getHistoricalMunicipalityCandidatePcts(
+          scenarioKey,
+          item.uf,
+          item.name,
+          candidates
+        );
+        const winner = getHistoricalWinnerCandidateId(municipalityVotes);
+        if (!municipalityVotes || !winner) return;
         municipalitiesByUf[item.uf] = municipalitiesByUf[item.uf] ?? {};
         municipalitiesByUf[item.uf][item.code] = municipalityVotes;
         paintByUf[item.uf] = paintByUf[item.uf] ?? {};
@@ -774,7 +772,8 @@ export function ElectionSimulator({
 
   const handleMunicipalitySave = (
     uf: string,
-    municipalityPaint: Record<string, CandidateId>
+    municipalityPaint: Record<string, CandidateId>,
+    municipalities: Record<string, Record<CandidateId, number>>
   ) => {
     setResults((prev) => {
       const existing = prev[uf];
@@ -792,6 +791,7 @@ export function ElectionSimulator({
         ...prev,
         [uf]: {
           ...nextState,
+          municipalities,
           municipalityPaint,
           usesMunicipalities: Object.keys(municipalityPaint).length > 0,
         },
@@ -1004,6 +1004,9 @@ export function ElectionSimulator({
     hoveredMunicipalityWinnerId && hoveredMunicipalityVotes
       ? hoveredMunicipalityVotes[hoveredMunicipalityWinnerId] || 0
       : 0;
+  const tooltipWinnerCandidate = mapTooltip?.municipalityCode
+    ? hoveredMunicipalityWinner
+    : hoveredWinner;
   const tooltipPlacement = mapTooltip
     ? {
         left:
@@ -1321,6 +1324,24 @@ export function ElectionSimulator({
             >
               {mapMunicipalityMode ? "Por estado" : "Por município"}
             </button>
+            {mapMunicipalityMode && (
+              <button
+                type="button"
+                onClick={() =>
+                  setMunicipalityColorMode((prev) =>
+                    prev === "percentage" ? "winner" : "percentage"
+                  )
+                }
+                className={`rounded-xl border px-4 py-2.5 text-sm font-semibold shadow-lg transition-all ${
+                  municipalityColorMode === "percentage"
+                    ? "border-emerald-300/60 bg-emerald-400/20 text-emerald-100"
+                    : "border-white/15 bg-slate-800/70 text-slate-200 hover:bg-slate-700"
+                }`}
+                title="Alternar municípios entre cor chapada e intensidade por percentual"
+              >
+                {municipalityColorMode === "percentage" ? "Com porcentagem" : "Sem porcentagem"}
+              </button>
+            )}
             <button
               type="button"
               onClick={handleExport}
@@ -1628,13 +1649,26 @@ export function ElectionSimulator({
                       </div>
                       </div>
                     </div>
-                    <div className="rounded-lg bg-white/10 px-2 py-1 text-[11px] font-black text-white">
-                      {hoveredStateInfo.uf}
+                    <div className="flex items-center gap-2">
+                      {tooltipWinnerCandidate?.photo && (
+                        <img
+                          src={tooltipWinnerCandidate.photo}
+                          alt={tooltipWinnerCandidate.name}
+                          className="h-10 w-10 rounded-full border-2 object-cover"
+                          style={{ borderColor: tooltipWinnerCandidate.color }}
+                          onError={(event) => {
+                            event.currentTarget.style.display = "none";
+                          }}
+                        />
+                      )}
+                      <div className="rounded-lg bg-white/10 px-2 py-1 text-[11px] font-black text-white">
+                        {hoveredStateInfo.uf}
+                      </div>
                     </div>
                   </div>
                   <div className="mb-3 text-xs font-semibold text-slate-300">
                     {mapTooltip.municipalityCode
-                      ? "Resultado municipal oficial TSE 2022"
+                      ? "Resultado municipal oficial TSE"
                       : `${getVotersForState(hoveredStateInfo, loadedScenario).toLocaleString("pt-BR")} eleitores`}
                   </div>
                   {mapTooltip.municipalityCode ? (
@@ -1843,12 +1877,20 @@ export function ElectionSimulator({
                       const result = results[pathItem.uf];
                       const winnerId = result?.municipalityPaint?.[pathItem.code] ?? null;
                       const winner = winnerId ? candidateById[winnerId] : null;
+                      const municipalityVotes = result?.municipalities?.[pathItem.code];
+                      const winnerPct = winnerId ? municipalityVotes?.[winnerId] ?? 55 : 0;
                       const stateInfo = STATE_BY_UF[pathItem.uf];
                       return (
                         <path
                           key={`${pathItem.uf}-${pathItem.code}`}
                           d={pathItem.d}
-                          fill={winner ? winner.color : mapTheme === "light" ? "#e2e8f0" : "#1e293b"}
+                          fill={
+                            winner
+                              ? municipalityColorMode === "percentage"
+                                ? getColorByWinnerPct(winner.color, winnerPct)
+                                : winner.color
+                              : mapTheme === "light" ? "#e2e8f0" : "#1e293b"
+                          }
                           stroke={mapTheme === "light" ? "#94a3b8" : "#0f172a"}
                           strokeWidth={0.25 / mapZoom}
                           className="pointer-events-auto cursor-crosshair transition-colors duration-150 hover:brightness-125"
@@ -2673,8 +2715,12 @@ export function ElectionSimulator({
             stateInfo={selectedStateInfo}
             candidates={candidates}
             initialPaint={results[selectedStateInfo.uf]?.municipalityPaint ?? {}}
+            initialMunicipalities={results[selectedStateInfo.uf]?.municipalities ?? {}}
+            scenarioKey={loadedScenario?.municipalityResultStrategy}
             onClose={() => setStateDialog(null)}
-            onSave={(paint) => handleMunicipalitySave(selectedStateInfo.uf, paint)}
+            onSave={(paint, municipalities) =>
+              handleMunicipalitySave(selectedStateInfo.uf, paint, municipalities)
+            }
           />
         )}
       </AnimatePresence>
@@ -2690,6 +2736,7 @@ export function ElectionSimulator({
             photoMapScale={photoMapScale}
             onClose={() => setStateDialog(null)}
             scenarioYear={scenarioYear}
+            municipalityScenarioKey={loadedScenario?.municipalityResultStrategy}
           />
         )}
       </AnimatePresence>
@@ -2706,7 +2753,7 @@ export function ElectionSimulator({
             candidateById={candidateById}
             onClose={() => setNationalPhotoOpen(false)}
             scenarioYear={scenarioYear}
-            useOfficialMunicipalityResults={loadedScenario?.municipalityResultStrategy === "tse-2022"}
+            municipalityScenarioKey={loadedScenario?.municipalityResultStrategy}
           />
         )}
       </AnimatePresence>
@@ -2725,7 +2772,7 @@ export function ElectionSimulator({
             candidateById={candidateById}
             onClose={() => setRegionalPhotoOpen(false)}
             scenarioYear={scenarioYear}
-            useOfficialMunicipalityResults={loadedScenario?.municipalityResultStrategy === "tse-2022"}
+            municipalityScenarioKey={loadedScenario?.municipalityResultStrategy}
           />
         )}
       </AnimatePresence>

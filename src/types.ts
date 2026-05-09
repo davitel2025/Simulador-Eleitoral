@@ -3,6 +3,7 @@ export type ElectionRound = "primeiro" | "segundo";
 export type RegionName = "Norte" | "Nordeste" | "Centro-Oeste" | "Sudeste" | "Sul";
 export type AnalyticsTab = "regioes" | "desempenho" | "ranking" | "candidatos";
 export type PhotoCardShape = "circle" | "portrait";
+export type HistoricalMunicipalityScenarioKey = "2018_1t" | "2018" | "2022_1t" | "2022";
 
 export interface Candidate {
   id: CandidateId;
@@ -79,7 +80,7 @@ export interface PoliticalScenario {
   results?: Record<string, Record<number, number>>;
   customStates?: CustomStateInfo[]; // para cenários personalizados
   nationalVoters?: number; // eleitorado nacional total (distribui proporcionalmente por estado)
-  municipalityResultStrategy?: "tse-2022";
+  municipalityResultStrategy?: HistoricalMunicipalityScenarioKey;
   isCustom?: boolean;
   generatedAt?: string;
 }

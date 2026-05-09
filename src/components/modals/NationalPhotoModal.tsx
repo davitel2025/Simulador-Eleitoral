@@ -17,7 +17,7 @@ import {
   type WinnerBoxConfig,
 } from "../photo/PhotoCards";
 import { NationalMapCenter } from "../photo/MapCenters";
-import type { Candidate, PathData, StateResult } from "../../types";
+import type { Candidate, HistoricalMunicipalityScenarioKey, PathData, StateResult } from "../../types";
 import {
   clearPersistedStateByPrefix,
   usePersistedState,
@@ -100,7 +100,7 @@ export function NationalPhotoModal({
   candidateById,
   onClose,
   scenarioYear,
-  useOfficialMunicipalityResults,
+  municipalityScenarioKey,
 }: {
   candidates: Candidate[];
   national: any;
@@ -111,7 +111,7 @@ export function NationalPhotoModal({
   candidateById: Record<number, Candidate>;
   onClose: () => void;
   scenarioYear?: number;
-  useOfficialMunicipalityResults?: boolean;
+  municipalityScenarioKey?: HistoricalMunicipalityScenarioKey;
 }) {
   const captureRef = useRef<HTMLDivElement>(null);
   const defaultSettings = useMemo<NationalPhotoSettings>(
@@ -375,7 +375,8 @@ export function NationalPhotoModal({
               candidateById={candidateById}
               mapSizePx={localMapScale}
               showMunicipalities={showMunicipalities}
-              useOfficialMunicipalityResults={useOfficialMunicipalityResults}
+              municipalityScenarioKey={municipalityScenarioKey}
+              shadeMunicipalitiesByPct={true}
             />
 
             {ranked.second && (
