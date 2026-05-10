@@ -420,6 +420,8 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
                 right={ranked.second}
                 bgStyle={bgStyle}
                 totalVotes={regionalData.total}
+                fontColor={fontColor}
+                useCandidateFontColor={useCandidateFontColor}
                 map={
                   showMunicipalities ? (
                     <RegionalMunicipalityMapCenter

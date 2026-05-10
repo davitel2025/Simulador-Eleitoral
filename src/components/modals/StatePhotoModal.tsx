@@ -381,6 +381,8 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
                 right={ranked.second}
                 bgStyle={bgStyle}
                 totalVotes={ranked.totalVotes}
+                fontColor={fontColor}
+                useCandidateFontColor={useCandidateFontColor}
                 map={
                   <StateMapCenter
                     stateInfo={stateInfo}

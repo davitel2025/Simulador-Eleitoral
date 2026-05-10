@@ -11,6 +11,25 @@ type PhotoTypographyProps = {
   useCandidateFontColor?: boolean;
 };
 
+function TitularBadge({ candidate }: { candidate: Candidate }) {
+  const titular = candidate.titular?.trim();
+  if (!titular) return null;
+  return (
+    <div className="absolute left-1 top-1 z-20 flex max-w-[88%] items-center gap-1.5 rounded bg-black/50 px-1.5 py-1 text-left shadow-lg backdrop-blur-sm">
+      {candidate.titularPhoto && (
+        <SafeImage
+          src={candidate.titularPhoto}
+          alt={titular}
+          className="h-8 w-8 flex-shrink-0 rounded-full object-cover"
+        />
+      )}
+      <span className="truncate text-[10px] font-bold leading-tight text-slate-100">
+        Titular: {titular}
+      </span>
+    </div>
+  );
+}
+
 // ─── Configuração do retângulo ao redor dos top candidatos ───────────────────
 export interface WinnerBoxConfig {
   show: boolean;
@@ -347,7 +366,7 @@ export function TopCandidateCard({
   const rankLabel = `${rank + 1}º colocado`;
   const textColor = fontColor;
   const percentageColor = useCandidateFontColor ? candidate.color : fontColor;
-  const ideologyColor = candidate.color;
+  const ideologyColor = useCandidateFontColor ? candidate.color : fontColor;
 
   // Retrato: largura = 75% da altura
   const portraitH = portraitPx ?? Math.round(avatarPx * 1.18);
@@ -370,10 +389,11 @@ export function TopCandidateCard({
 
   return (
     <div
-      className="rounded-3xl border bg-slate-900/60 p-6 text-center flex flex-col items-center"
+      className="relative rounded-3xl border bg-slate-900/60 p-6 text-center flex flex-col items-center"
       style={frameStyle}
       aria-label={rankLabel}
     >
+      <TitularBadge candidate={candidate} />
       {candidate.partyLogo && (
         <div className="mb-3 h-10 w-auto flex items-center justify-center">
           <SafeImage
@@ -468,13 +488,14 @@ export function BottomCandidateCard({
   const { candidate, pct, votes } = item;
   const textColor = fontColor;
   const percentageColor = useCandidateFontColor ? candidate.color : fontColor;
-  const ideologyColor = candidate.color;
+  const ideologyColor = useCandidateFontColor ? candidate.color : fontColor;
 
   return (
     <div
-      className="rounded-2xl border bg-slate-900/40 p-4 text-center flex flex-col items-center"
+      className="relative rounded-2xl border bg-slate-900/40 p-4 text-center flex flex-col items-center"
       style={{ borderColor: `${candidate.color}30` }}
     >
+      <TitularBadge candidate={candidate} />
       {candidate.partyLogo && (
         <div className="mb-2 h-7 flex items-center justify-center">
           <SafeImage
@@ -585,16 +606,21 @@ export function MapSizeSlider({
   );
 }
 
-function VerticalCandidatePanel({ item }: { item: RankedItem }) {
+function VerticalCandidatePanel({
+  item,
+  fontColor = "#ffffff",
+  useCandidateFontColor = false,
+}: {
+  item: RankedItem;
+} & PhotoTypographyProps) {
   const { candidate } = item;
-  const badges = [
-    candidate.vice ? { label: `Vice: ${candidate.vice}`, color: "#cbd5e1" } : null,
-    candidate.ideology ? { label: candidate.ideology, color: candidate.color } : null,
-    candidate.coalition ? { label: candidate.coalition, color: "#cbd5e1" } : null,
-  ].filter((badge): badge is { label: string; color: string } => Boolean(badge));
+  const textColor = fontColor;
+  const percentageColor = useCandidateFontColor ? candidate.color : fontColor;
+  const ideologyColor = useCandidateFontColor ? candidate.color : fontColor;
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col items-center">
+    <div className="relative flex min-w-0 flex-1 flex-col items-center">
+      <TitularBadge candidate={candidate} />
       <div
         className="mb-5 h-[420px] w-[310px] overflow-hidden rounded-[30px] border-[6px] bg-slate-950 shadow-[0_28px_70px_-34px_rgba(0,0,0,0.9)]"
         style={{ borderColor: candidate.color }}
@@ -611,20 +637,43 @@ function VerticalCandidatePanel({ item }: { item: RankedItem }) {
           </div>
         )}
       </div>
-      <div className="max-w-[360px] text-center text-[34px] font-black leading-tight text-white">
+      <div className="max-w-[360px] text-center text-[34px] font-black leading-tight" style={{ color: textColor }}>
         {candidate.name}
       </div>
-      <div className="mt-4 flex max-w-[390px] flex-wrap justify-center gap-2">
-        {badges.map((badge) => (
-          <div
-            key={badge.label}
-            className="max-w-[180px] rounded-full border border-white/10 bg-slate-900/80 px-3 py-2 text-center text-[15px] font-bold leading-tight text-slate-300"
-            style={{ color: badge.color }}
-          >
-            {badge.label}
-          </div>
-        ))}
+      {candidate.vice && (
+        <div className="mt-3 max-w-[340px] text-center text-[18px] font-bold leading-tight" style={{ color: textColor }}>
+          Vice: {candidate.vice}
+        </div>
+      )}
+      {candidate.ideology && (
+        <div className="mt-2 max-w-[300px] rounded-full border border-white/10 bg-slate-900/80 px-4 py-2 text-center text-[16px] font-black leading-tight" style={{ color: ideologyColor }}>
+          {candidate.ideology}
+        </div>
+      )}
+      <div className="mt-4 text-[72px] font-black leading-none tracking-normal" style={{ color: percentageColor }}>
+        {formatPct(item.pct)}
       </div>
+      <div className="mt-4 flex max-w-[390px] flex-wrap justify-center gap-2">
+        {candidate.partyLogo ? (
+          <div className="flex h-10 max-w-[120px] items-center justify-center rounded-lg bg-white px-2 py-1">
+            <SafeImage src={candidate.partyLogo} alt={candidate.party} className="max-h-full max-w-full object-contain" />
+          </div>
+        ) : (
+          <div className="rounded-full border border-white/10 bg-slate-900/80 px-3 py-2 text-center text-[15px] font-bold leading-tight" style={{ color: textColor }}>
+            {candidate.party}
+          </div>
+        )}
+        {candidate.coalition && (
+          <div className="max-w-[220px] rounded-full border border-white/10 bg-slate-900/80 px-3 py-2 text-center text-[15px] font-bold leading-tight" style={{ color: textColor }}>
+            {candidate.coalition}
+          </div>
+        )}
+      </div>
+      {item.votes !== undefined && (
+        <div className="mt-3 text-[18px] font-bold text-white/65">
+          {Math.round(item.votes).toLocaleString("pt-BR")} votos
+        </div>
+      )}
     </div>
   );
 }
@@ -636,6 +685,8 @@ export function VerticalPhotoCard({
   map,
   bgStyle,
   totalVotes,
+  fontColor = "#ffffff",
+  useCandidateFontColor = false,
 }: {
   title: string;
   left: RankedItem;
@@ -643,7 +694,7 @@ export function VerticalPhotoCard({
   map: ReactNode;
   bgStyle: CSSProperties;
   totalVotes?: number;
-}) {
+} & PhotoTypographyProps) {
   return (
     <div
       className="relative overflow-hidden rounded-[54px] border border-white/10 p-14 text-white shadow-[0_60px_120px_-30px_rgba(0,0,0,0.85)]"
@@ -661,36 +712,15 @@ export function VerticalPhotoCard({
           {title}
         </div>
 
-        <div className="flex min-h-[620px] items-start justify-center gap-8">
-          <VerticalCandidatePanel item={left} />
-          <VerticalCandidatePanel item={right} />
+        <div className="flex min-h-[860px] items-start justify-center gap-8">
+          <VerticalCandidatePanel item={left} fontColor={fontColor} useCandidateFontColor={useCandidateFontColor} />
+          <VerticalCandidatePanel item={right} fontColor={fontColor} useCandidateFontColor={useCandidateFontColor} />
         </div>
 
-        <div className="flex min-h-[560px] flex-1 items-center justify-center">
+        <div className="flex min-h-[620px] flex-1 items-center justify-center">
           <div className="scale-[1.18]">
             {map}
           </div>
-        </div>
-
-        <div className="grid min-h-[420px] grid-cols-2 items-end gap-8 pb-8">
-          {[left, right].map((item, index) => (
-            <div
-              key={item.candidate.id}
-              className={`flex flex-col ${index === 0 ? "items-start text-left" : "items-end text-right"}`}
-            >
-              <div
-                className="text-[118px] font-black leading-none tracking-normal"
-                style={{ color: item.candidate.color }}
-              >
-                {formatPct(item.pct)}
-              </div>
-              {item.votes !== undefined && (
-                <div className="mt-3 text-[24px] font-bold text-white/65">
-                  {Math.round(item.votes).toLocaleString("pt-BR")} votos
-                </div>
-              )}
-            </div>
-          ))}
         </div>
       </div>
     </div>

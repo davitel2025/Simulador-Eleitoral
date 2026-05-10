@@ -15,6 +15,8 @@ export interface Candidate {
   color: string;
   photo?: string;
   vicePhoto?: string;
+  titular?: string;
+  titularPhoto?: string;
   partyLogo?: string;
   ideology?: string;
   coalition?: string;

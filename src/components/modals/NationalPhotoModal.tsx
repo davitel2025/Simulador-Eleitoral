@@ -545,6 +545,8 @@ export function NationalPhotoModal({
                 right={ranked.second}
                 bgStyle={bgStyle}
                 totalVotes={national.totalVotes}
+                fontColor={fontColor}
+                useCandidateFontColor={useCandidateFontColor}
                 map={
                   <NationalMapCenter
                     paths={paths}

@@ -108,8 +108,8 @@ export function MunicipalityPaintModal({
   useEffect(() => {
     if (!contextMenu) return undefined;
     const closeContextMenu = () => setContextMenu(null);
-    window.addEventListener("click", closeContextMenu);
-    return () => window.removeEventListener("click", closeContextMenu);
+    window.addEventListener("mousedown", closeContextMenu);
+    return () => window.removeEventListener("mousedown", closeContextMenu);
   }, [contextMenu]);
 
   const candidateById = useMemo(() => Object.fromEntries(candidates.map((candidate) => [candidate.id, candidate])), [candidates]);
@@ -665,7 +665,13 @@ export function MunicipalityPaintModal({
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setContextMenu(null)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    const name = contextMenu.name;
+                    setEditMode("percentage");
+                    setSearchQuery(name);
+                    setContextMenu(null);
+                  }}
                   className="rounded-lg border border-slate-600 px-3 py-1.5 text-xs font-black text-slate-200"
                 >
                   Alterar
