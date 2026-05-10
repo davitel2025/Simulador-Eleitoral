@@ -10,12 +10,52 @@ export const HISTORICAL_STATE_RESULTS_BY_NUMBER = JSON.parse("{\"2018_1t\":{\"AC
 export const HISTORICAL_CANDIDATE_SUMMARY_BY_NUMBER = JSON.parse("{\"2018_1t\":{\"12\":{\"number\":\"12\",\"name\":\"CIRO GOMES\",\"party\":\"PDT\"},\"13\":{\"number\":\"13\",\"name\":\"FERNANDO HADDAD\",\"party\":\"PT\"},\"15\":{\"number\":\"15\",\"name\":\"HENRIQUE MEIRELLES\",\"party\":\"MDB\"},\"16\":{\"number\":\"16\",\"name\":\"VERA\",\"party\":\"PSTU\"},\"17\":{\"number\":\"17\",\"name\":\"JAIR BOLSONARO\",\"party\":\"PSL\"},\"18\":{\"number\":\"18\",\"name\":\"MARINA SILVA\",\"party\":\"REDE\"},\"19\":{\"number\":\"19\",\"name\":\"ALVARO DIAS\",\"party\":\"PODE\"},\"27\":{\"number\":\"27\",\"name\":\"EYMAEL\",\"party\":\"DC\"},\"30\":{\"number\":\"30\",\"name\":\"JOÃO AMOÊDO\",\"party\":\"NOVO\"},\"45\":{\"number\":\"45\",\"name\":\"GERALDO ALCKMIN\",\"party\":\"PSDB\"},\"50\":{\"number\":\"50\",\"name\":\"GUILHERME BOULOS\",\"party\":\"PSOL\"},\"51\":{\"number\":\"51\",\"name\":\"CABO DACIOLO\",\"party\":\"PATRI\"},\"54\":{\"number\":\"54\",\"name\":\"JOÃO GOULART FILHO\",\"party\":\"PPL\"}},\"2018\":{\"13\":{\"number\":\"13\",\"name\":\"FERNANDO HADDAD\",\"party\":\"PT\"},\"17\":{\"number\":\"17\",\"name\":\"JAIR BOLSONARO\",\"party\":\"PSL\"}},\"2022_1t\":{\"12\":{\"number\":\"12\",\"name\":\"CIRO GOMES\",\"party\":\"PDT\"},\"13\":{\"number\":\"13\",\"name\":\"LULA\",\"party\":\"PT\"},\"14\":{\"number\":\"14\",\"name\":\"PADRE KELMON\",\"party\":\"PTB\"},\"15\":{\"number\":\"15\",\"name\":\"SIMONE TEBET\",\"party\":\"MDB\"},\"16\":{\"number\":\"16\",\"name\":\"VERA\",\"party\":\"PSTU\"},\"21\":{\"number\":\"21\",\"name\":\"SOFIA MANZANO\",\"party\":\"PCB\"},\"22\":{\"number\":\"22\",\"name\":\"JAIR BOLSONARO\",\"party\":\"PL\"},\"27\":{\"number\":\"27\",\"name\":\"CONSTITUINTE EYMAEL\",\"party\":\"DC\"},\"30\":{\"number\":\"30\",\"name\":\"FELIPE D AVILA\",\"party\":\"NOVO\"},\"44\":{\"number\":\"44\",\"name\":\"SORAYA THRONICKE\",\"party\":\"UNIÃO\"},\"80\":{\"number\":\"80\",\"name\":\"LÉO PÉRICLES\",\"party\":\"UP\"}},\"2022\":{\"13\":{\"number\":\"13\",\"name\":\"LULA\",\"party\":\"PT\"},\"22\":{\"number\":\"22\",\"name\":\"JAIR BOLSONARO\",\"party\":\"PL\"}}}") as Record<HistoricalMunicipalityScenarioKey, Record<string, { number: string; name: string; party: string }>>;
 
 export function normalizeHistoricalMunicipalityName(value: string): string {
-  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim();
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR')
+    .replace(/[’'`´]/g, ' ')
+    .replace(/[.\u2010-\u2015-]/g, ' ')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildHistoricalMunicipalityNameVariants(name: string): string[] {
+  const base = normalizeHistoricalMunicipalityName(name);
+  const variants = new Set<string>([base]);
+  const add = (value: string) => {
+    const normalized = value.replace(/\s+/g, ' ').trim();
+    if (normalized) variants.add(normalized);
+  };
+
+  add(base.replace(/\s+/g, '-'));
+  add(base.replace(/-/g, ' '));
+  add(base.replace(/\s+/g, ''));
+  add(base.replace(/\bd\s+/g, 'do '));
+  add(base.replace(/\bd\s+/g, 'de '));
+  add(base.replace(/\bdo\s+/g, 'd '));
+  add(base.replace(/\bde\s+/g, 'd '));
+  add(base.replace(/^(de|do|da|dos|das)\s+/, ''));
+
+  Array.from(variants).forEach((variant) => {
+    add(variant.replace(/\s+/g, '-'));
+    add(variant.replace(/\s+/g, ''));
+  });
+
+  return Array.from(variants);
 }
 
 export function getHistoricalMunicipalityVotes(scenarioKey: HistoricalMunicipalityScenarioKey | undefined, uf: string, name: string): HistoricalMunicipalityVotes | undefined {
   if (!scenarioKey) return undefined;
-  return HISTORICAL_MUNICIPALITY_RESULTS[scenarioKey]?.[`${uf.toUpperCase()}:${normalizeHistoricalMunicipalityName(name)}`];
+  const source = HISTORICAL_MUNICIPALITY_RESULTS[scenarioKey];
+  if (!source) return undefined;
+  const upperUf = uf.toUpperCase();
+  for (const nameVariant of buildHistoricalMunicipalityNameVariants(name)) {
+    const match = source[`${upperUf}:${nameVariant}`];
+    if (match) return match;
+  }
+  return undefined;
 }
 
 export function getHistoricalMunicipalityCandidatePcts(
@@ -43,13 +83,17 @@ export function getHistoricalWinnerCandidateId(votes: Record<CandidateId, number
   if (!votes) return null;
   let winner: CandidateId | null = null;
   let winnerPct = -1;
+  let ties = 0;
   Object.entries(votes).forEach(([id, pct]) => {
     if (pct > winnerPct) {
       winner = Number(id);
       winnerPct = pct;
+      ties = 1;
+    } else if (pct === winnerPct) {
+      ties += 1;
     }
   });
-  return winnerPct > 0 ? winner : null;
+  return winnerPct > 0 && ties === 1 ? winner : null;
 }
 
 export function buildHistoricalStateResults(

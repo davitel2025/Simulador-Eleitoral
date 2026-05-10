@@ -27,6 +27,10 @@ import type {
 function MunicipalBroadcastDefs() {
   return (
     <defs>
+      <pattern id="municipalityTiePattern" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <rect width="8" height="8" fill="#64748b" />
+        <rect width="3" height="8" fill="#cbd5e1" opacity="0.65" />
+      </pattern>
       <filter id="municipalBroadcastGlow" x="-8%" y="-8%" width="116%" height="116%">
         <feGaussianBlur in="SourceAlpha" stdDeviation="1.1" result="blur" />
         <feComposite in="blur" in2="SourceAlpha" operator="out" result="edge" />
@@ -40,6 +44,13 @@ function MunicipalBroadcastDefs() {
 function getCandidateIndex(candidateById: Record<number, Candidate>, candidateId: CandidateId): number {
   const ids = Object.keys(candidateById).map(Number).sort((a, b) => a - b);
   return Math.max(0, ids.indexOf(candidateId));
+}
+
+function hasMunicipalityTie(votes: Record<CandidateId, number> | undefined): boolean {
+  if (!votes) return false;
+  const values = Object.values(votes);
+  const best = Math.max(...values);
+  return best > 0 && values.filter((value) => value === best).length > 1;
 }
 
 export function NationalMapCenter({
@@ -124,14 +135,17 @@ export function NationalMapCenter({
             candidates
           );
           const officialWinner = getHistoricalWinnerCandidateId(officialVotes);
-          const winnerId = stateResult?.municipalityPaint?.[pathItem.code] ?? officialWinner;
           const municipalityVotes = stateResult?.municipalities?.[pathItem.code] ?? officialVotes;
+          const isTie = hasMunicipalityTie(municipalityVotes);
+          const winnerId = isTie ? null : stateResult?.municipalityPaint?.[pathItem.code] ?? officialWinner;
           const winner = winnerId ? candidateById[winnerId] : null;
           const pct = winnerId ? municipalityVotes?.[winnerId] ?? 55 : 0;
           const stateWinner = stateResult?.winner ? candidateById[stateResult.winner] : null;
           const statePct = stateResult?.winner ? stateResult.votes[stateResult.winner] : 0;
           const winnerIndex = winnerId ? getCandidateIndex(candidateById, winnerId) : 0;
-          const fill = winner
+          const fill = isTie
+            ? "url(#municipalityTiePattern)"
+            : winner
             ? getMunicipalityFillColor({
                 baseColor: winner.color,
                 winnerPct: pct,
@@ -142,7 +156,7 @@ export function NationalMapCenter({
             : stateWinner
               ? getColorByWinnerPct(stateWinner.color, statePct)
               : "#0f172a";
-          const stroke = municipalityMapStyle === "broadcast" ? "#94a3b8" : winner ? shadeHex(winner.color, 0.35, "black") : "#1e293b";
+          const stroke = isTie ? "#cbd5e1" : municipalityMapStyle === "broadcast" ? "#94a3b8" : winner ? shadeHex(winner.color, 0.35, "black") : "#1e293b";
           return (
             <path
               key={`${pathItem.uf}-${pathItem.code}`}
@@ -273,14 +287,18 @@ export function RegionalMunicipalityMapCenter({
             candidates
           );
           const officialWinner = getHistoricalWinnerCandidateId(officialVotes);
-          const paintedId = stateResult?.municipalityPaint?.[pathItem.code] ?? officialWinner;
           const municipalityVotes = stateResult?.municipalities?.[pathItem.code] ?? officialVotes;
+          const isTie = hasMunicipalityTie(municipalityVotes);
+          const paintedId = isTie ? null : stateResult?.municipalityPaint?.[pathItem.code] ?? officialWinner;
           const paintedCandidate = paintedId ? candidateById[paintedId] : null;
           const pct = paintedId ? municipalityVotes?.[paintedId] ?? 55 : 0;
           const winnerIndex = paintedId ? getCandidateIndex(candidateById, paintedId) : 0;
           let fill = "#0f172a";
           let stroke = "#1e293b";
-          if (paintedCandidate) {
+          if (isTie) {
+            fill = "url(#municipalityTiePattern)";
+            stroke = "#cbd5e1";
+          } else if (paintedCandidate) {
             fill = getMunicipalityFillColor({
               baseColor: paintedCandidate.color,
               winnerPct: pct,
@@ -383,12 +401,15 @@ export function StateMapCenter({
               candidates
             );
             const officialWinner = getHistoricalWinnerCandidateId(officialVotes);
-            const paintedId = municipalityPaint[pathItem.code] ?? officialWinner;
-            const paintedCandidate = candidateById[paintedId];
             const pathVotes = municipalityVotes?.[pathItem.code] ?? officialVotes;
+            const isTie = hasMunicipalityTie(pathVotes);
+            const paintedId = isTie ? null : municipalityPaint[pathItem.code] ?? officialWinner;
+            const paintedCandidate = candidateById[paintedId];
             const paintedPct = paintedId ? pathVotes?.[paintedId] ?? 55 : 0;
             const winnerIndex = paintedId ? getCandidateIndex(candidateById, paintedId) : 0;
-            const fill = showMunicipalityPaint && paintedCandidate
+            const fill = showMunicipalityPaint && isTie
+              ? "url(#municipalityTiePattern)"
+              : showMunicipalityPaint && paintedCandidate
               ? getMunicipalityFillColor({
                   baseColor: paintedCandidate.color,
                   winnerPct: paintedPct,
@@ -400,7 +421,7 @@ export function StateMapCenter({
             const stroke = showMunicipalityPaint
               ? municipalityMapStyle === "broadcast"
                 ? "#94a3b8"
-                : (paintedCandidate ? shadeHex(paintedCandidate.color, 0.35, "black") : "#1e293b")
+                : isTie ? "#cbd5e1" : (paintedCandidate ? shadeHex(paintedCandidate.color, 0.35, "black") : "#1e293b")
               : fallbackFill;
             return (
               <path

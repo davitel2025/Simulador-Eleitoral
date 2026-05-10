@@ -345,7 +345,9 @@ export function TopCandidateCard({
 } & PhotoTypographyProps) {
   const { candidate, pct, votes } = item;
   const rankLabel = `${rank + 1}º colocado`;
-  const textColor = useCandidateFontColor ? candidate.color : fontColor;
+  const textColor = fontColor;
+  const percentageColor = useCandidateFontColor ? candidate.color : fontColor;
+  const ideologyColor = candidate.color;
 
   // Retrato: largura = 75% da altura
   const portraitH = portraitPx ?? Math.round(avatarPx * 1.18);
@@ -407,7 +409,7 @@ export function TopCandidateCard({
         {candidate.name}
       </div>
       {showVice && candidate.vice && (
-        <div className="flex items-center gap-2 mb-2">
+        <div className="mb-1 flex items-center gap-2">
           {candidate.vicePhoto && (
             <div
               className="h-8 w-8 overflow-hidden rounded-full border-2"
@@ -423,20 +425,20 @@ export function TopCandidateCard({
           <div className="font-semibold" style={{ color: textColor, fontSize: fontSizeBase * 0.85 }}>Vice: {candidate.vice}</div>
         </div>
       )}
-      {!candidate.partyLogo && (
-        <div className="font-bold mb-2" style={{ color: textColor, fontSize: fontSizeBase * 0.85 }}>{candidate.party}</div>
-      )}
       {candidate.ideology && (
-        <div className="mb-1 rounded-lg px-3 py-1 font-bold bg-slate-800/50" style={{ color: textColor, fontSize: fontSizeBase * 0.8 }}>
+        <div className="mb-1 rounded-lg px-3 py-1 font-bold bg-slate-800/50" style={{ color: ideologyColor, fontSize: fontSizeBase * 0.8 }}>
           {candidate.ideology}
         </div>
       )}
+      <div className="font-black" style={{ color: percentageColor, fontSize: fontSizeBase * 4.2 }}>{formatPct(pct)}</div>
+      {!candidate.partyLogo && (
+        <div className="mt-1 font-bold" style={{ color: textColor, fontSize: fontSizeBase * 0.85 }}>{candidate.party}</div>
+      )}
       {candidate.coalition && (
-        <div className="mb-2 rounded-lg px-3 py-1 font-bold bg-slate-800/30 max-w-[200px] leading-relaxed" style={{ color: textColor, fontSize: fontSizeBase * 0.78 }}>
+        <div className="mt-1 rounded-lg px-3 py-1 font-bold bg-slate-800/30 max-w-[200px] leading-relaxed" style={{ color: textColor, fontSize: fontSizeBase * 0.78 }}>
           🤝 {candidate.coalition}
         </div>
       )}
-      <div className="font-black" style={{ color: textColor, fontSize: fontSizeBase * 4.2 }}>{formatPct(pct)}</div>
       {showVotes && votes !== undefined && (
         <div className="mt-1" style={{ color: textColor, fontSize: fontSizeBase }}>
           {Math.round(votes).toLocaleString("pt-BR")} votos
@@ -464,7 +466,9 @@ export function BottomCandidateCard({
   shape?: PhotoCardShape;
 } & PhotoTypographyProps) {
   const { candidate, pct, votes } = item;
-  const textColor = useCandidateFontColor ? candidate.color : fontColor;
+  const textColor = fontColor;
+  const percentageColor = useCandidateFontColor ? candidate.color : fontColor;
+  const ideologyColor = candidate.color;
 
   return (
     <div
@@ -496,18 +500,23 @@ export function BottomCandidateCard({
       <div className="font-black mb-0.5" style={{ color: textColor, fontSize: fontSizeBase * 1.3 }}>
         {candidate.name}
       </div>
-      {!candidate.partyLogo && (
-        <div className="mb-0.5" style={{ color: textColor, fontSize: fontSizeBase * 0.8 }}>{candidate.party}</div>
+      {candidate.vice && (
+        <div className="mb-0.5 font-semibold" style={{ color: textColor, fontSize: fontSizeBase * 0.72 }}>
+          Vice: {candidate.vice}
+        </div>
       )}
       {candidate.ideology && (
-        <div className="mb-1" style={{ color: textColor, fontSize: fontSizeBase * 0.75 }}>{candidate.ideology}</div>
+        <div className="mb-1" style={{ color: ideologyColor, fontSize: fontSizeBase * 0.75 }}>{candidate.ideology}</div>
+      )}
+      <div className="font-black" style={{ color: percentageColor, fontSize: fontSizeBase * 1.8 }}>{formatPct(pct)}</div>
+      {!candidate.partyLogo && (
+        <div className="mt-0.5" style={{ color: textColor, fontSize: fontSizeBase * 0.8 }}>{candidate.party}</div>
       )}
       {candidate.coalition && (
-        <div className="mb-1 max-w-[160px] leading-snug" style={{ color: textColor, fontSize: fontSizeBase * 0.72 }}>
+        <div className="mt-1 max-w-[160px] leading-snug" style={{ color: textColor, fontSize: fontSizeBase * 0.72 }}>
           🤝 {candidate.coalition}
         </div>
       )}
-      <div className="font-black" style={{ color: textColor, fontSize: fontSizeBase * 1.8 }}>{formatPct(pct)}</div>
       {showVotes && votes !== undefined && (
         <div style={{ color: textColor, fontSize: fontSizeBase * 0.75 }}>{Math.round(votes).toLocaleString("pt-BR")}</div>
       )}
@@ -579,10 +588,10 @@ export function MapSizeSlider({
 function VerticalCandidatePanel({ item }: { item: RankedItem }) {
   const { candidate } = item;
   const badges = [
-    candidate.vice ? `Vice: ${candidate.vice}` : null,
-    candidate.ideology,
-    candidate.coalition,
-  ].filter(Boolean);
+    candidate.vice ? { label: `Vice: ${candidate.vice}`, color: "#cbd5e1" } : null,
+    candidate.ideology ? { label: candidate.ideology, color: candidate.color } : null,
+    candidate.coalition ? { label: candidate.coalition, color: "#cbd5e1" } : null,
+  ].filter((badge): badge is { label: string; color: string } => Boolean(badge));
 
   return (
     <div className="flex min-w-0 flex-1 flex-col items-center">
@@ -608,10 +617,11 @@ function VerticalCandidatePanel({ item }: { item: RankedItem }) {
       <div className="mt-4 flex max-w-[390px] flex-wrap justify-center gap-2">
         {badges.map((badge) => (
           <div
-            key={badge}
+            key={badge.label}
             className="max-w-[180px] rounded-full border border-white/10 bg-slate-900/80 px-3 py-2 text-center text-[15px] font-bold leading-tight text-slate-300"
+            style={{ color: badge.color }}
           >
-            {badge}
+            {badge.label}
           </div>
         ))}
       </div>
@@ -625,12 +635,14 @@ export function VerticalPhotoCard({
   right,
   map,
   bgStyle,
+  totalVotes,
 }: {
   title: string;
   left: RankedItem;
   right: RankedItem;
   map: ReactNode;
   bgStyle: CSSProperties;
+  totalVotes?: number;
 }) {
   return (
     <div
@@ -638,6 +650,12 @@ export function VerticalPhotoCard({
       style={{ ...bgStyle, width: 1080, height: 1920 }}
     >
       <div className="absolute inset-x-0 top-0 h-80 bg-gradient-to-b from-white/10 to-transparent" />
+      {totalVotes !== undefined && (
+        <div className="absolute right-10 top-10 z-20 rounded-full border border-white/10 bg-white/5 px-5 py-3 text-right shadow-2xl backdrop-blur-sm">
+          <div className="text-[22px] font-black text-white">{Math.round(totalVotes).toLocaleString("pt-BR")}</div>
+          <div className="mt-0.5 text-[9px] font-black uppercase tracking-[0.24em] text-slate-400">Votos Válidos</div>
+        </div>
+      )}
       <div className="relative z-10 flex h-full flex-col">
         <div className="mb-12 text-center text-[24px] font-black uppercase tracking-[0.34em] text-slate-400">
           {title}

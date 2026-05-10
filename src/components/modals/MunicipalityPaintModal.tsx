@@ -18,6 +18,8 @@ import type {
 } from "../../types";
 
 type MunicipalityEditMode = "manual" | "percentage";
+type MunicipalityContextMenu = { name: string; x: number; y: number; municipalityId: string };
+type HoveredMunicipality = { name: string; x: number; y: number };
 
 const HISTORICAL_IMPORT_NUMBERS: Record<"2018" | "2022", string[]> = {
   "2018": ["17", "13"],
@@ -76,6 +78,8 @@ export function MunicipalityPaintModal({
   const [municipalityMapStyle, setMunicipalityMapStyle] =
     usePersistedState<MunicipalityMapStyle>("municipalityMapStyle", "original");
   const [fillAllCandidate, setFillAllCandidate] = useState<CandidateId | null>(null);
+  const [hoveredMunicipality, setHoveredMunicipality] = useState<HoveredMunicipality | null>(null);
+  const [contextMenu, setContextMenu] = useState<MunicipalityContextMenu | null>(null);
   const isPaintingRef = useRef(false);
 
   useEffect(() => {
@@ -100,6 +104,13 @@ export function MunicipalityPaintModal({
       window.removeEventListener("blur", stopPainting);
     };
   }, []);
+
+  useEffect(() => {
+    if (!contextMenu) return undefined;
+    const closeContextMenu = () => setContextMenu(null);
+    window.addEventListener("click", closeContextMenu);
+    return () => window.removeEventListener("click", closeContextMenu);
+  }, [contextMenu]);
 
   const candidateById = useMemo(() => Object.fromEntries(candidates.map((candidate) => [candidate.id, candidate])), [candidates]);
   const candidateIndexById = useMemo(
@@ -148,14 +159,40 @@ export function MunicipalityPaintModal({
   const getWinnerFromVotes = (votes: Record<CandidateId, number>): CandidateId | null => {
     let winner: CandidateId | null = null;
     let best = -Infinity;
+    let ties = 0;
     candidates.forEach((candidate) => {
       const pct = votes[candidate.id] ?? 0;
       if (pct > best) {
         best = pct;
         winner = candidate.id;
+        ties = 1;
+      } else if (pct === best) {
+        ties += 1;
       }
     });
-    return winner;
+    return best > 0 && ties === 1 ? winner : null;
+  };
+
+  const getTieCandidateIds = (votes: Record<CandidateId, number> | undefined): CandidateId[] => {
+    if (!votes) return [];
+    const values = candidates.map((candidate) => ({
+      id: candidate.id,
+      pct: votes[candidate.id] ?? 0,
+    }));
+    const best = Math.max(...values.map((item) => item.pct));
+    if (best <= 0) return [];
+    const tied = values.filter((item) => item.pct === best).map((item) => item.id);
+    return tied.length > 1 ? tied : [];
+  };
+
+  const getContextVotesForPath = (pathItem: MunicipalityPath): Record<CandidateId, number> | null => {
+    const stored = municipalities[pathItem.code];
+    if (stored) return normalizeCandidateVotes(stored);
+    const paintedId = paint[pathItem.code];
+    if (!paintedId) return null;
+    return Object.fromEntries(
+      candidates.map((candidate) => [candidate.id, candidate.id === paintedId ? 100 : 0])
+    ) as Record<CandidateId, number>;
   };
 
   const updateMunicipalityPct = (
@@ -244,9 +281,8 @@ export function MunicipalityPaintModal({
         })
       ) as Record<CandidateId, number>;
       const winner = getWinnerFromVotes(votes);
-      if (!winner) return;
-      nextPaint[path.code] = winner;
       nextMunicipalities[path.code] = votes;
+      if (winner) nextPaint[path.code] = winner;
     });
     setPaint(nextPaint);
     setMunicipalities(nextMunicipalities);
@@ -272,6 +308,7 @@ export function MunicipalityPaintModal({
   const handleMunicipalityMouseDown = (municipalityCode: string, event: React.MouseEvent) => {
     if (event.button !== 0) return;
     event.preventDefault();
+    setContextMenu(null);
     isPaintingRef.current = true;
     applyPaint(municipalityCode);
   };
@@ -285,6 +322,26 @@ export function MunicipalityPaintModal({
       }
     }
     applyPaint(municipalityCode);
+  };
+
+  const updateHoveredMunicipality = (pathItem: MunicipalityPath, event: React.MouseEvent) => {
+    setHoveredMunicipality({
+      name: pathItem.name,
+      x: event.clientX,
+      y: event.clientY,
+    });
+  };
+
+  const handleMunicipalityContextMenu = (pathItem: MunicipalityPath, event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    isPaintingRef.current = false;
+    setContextMenu({
+      name: pathItem.name,
+      x: event.clientX,
+      y: event.clientY,
+      municipalityId: pathItem.code,
+    });
   };
 
   return (
@@ -502,11 +559,15 @@ export function MunicipalityPaintModal({
             <svg
               viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
               className="h-[68vh] w-full select-none"
-              onMouseLeave={() => { isPaintingRef.current = false; }}
+              onMouseLeave={() => { isPaintingRef.current = false; setHoveredMunicipality(null); }}
               onContextMenu={(event) => event.preventDefault()}
               style={{ touchAction: "none" }}
             >
               <defs>
+                <pattern id="municipalityTiePattern" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                  <rect width="8" height="8" fill="#64748b" />
+                  <rect width="3" height="8" fill="#cbd5e1" opacity="0.65" />
+                </pattern>
                 <filter id="municipalBroadcastGlow" x="-8%" y="-8%" width="116%" height="116%">
                   <feGaussianBlur in="SourceAlpha" stdDeviation="1.1" result="blur" />
                   <feComposite in="blur" in2="SourceAlpha" operator="out" result="edge" />
@@ -515,10 +576,15 @@ export function MunicipalityPaintModal({
                 </filter>
               </defs>
               {paths.map((pathItem) => {
-                const candidate = candidateById[paint[pathItem.code]];
-                const candidatePct = candidate ? municipalities[pathItem.code]?.[candidate.id] ?? 55 : 0;
+                const municipalityVotes = municipalities[pathItem.code];
+                const tieCandidateIds = getTieCandidateIds(municipalityVotes);
+                const isTie = tieCandidateIds.length > 1;
+                const candidate = isTie ? null : candidateById[paint[pathItem.code]];
+                const candidatePct = candidate ? municipalityVotes?.[candidate.id] ?? 55 : 0;
                 const candidateIndex = candidate ? candidateIndexById[candidate.id] ?? 0 : 0;
-                const fill = candidate
+                const fill = isTie
+                  ? "url(#municipalityTiePattern)"
+                  : candidate
                   ? getMunicipalityFillColor({
                       baseColor: candidate.color,
                       winnerPct: candidatePct,
@@ -527,7 +593,9 @@ export function MunicipalityPaintModal({
                       mapStyle: municipalityMapStyle,
                     })
                   : "#0f172a";
-                const stroke = municipalityMapStyle === "broadcast" ? "#94a3b8" : candidate ? shadeHex(candidate.color, 0.3, "black") : "#1f2937";
+                const stroke = isTie
+                  ? "#cbd5e1"
+                  : municipalityMapStyle === "broadcast" ? "#94a3b8" : candidate ? shadeHex(candidate.color, 0.3, "black") : "#1f2937";
                 return (
                   <path
                     key={pathItem.code}
@@ -538,13 +606,81 @@ export function MunicipalityPaintModal({
                     filter={municipalityMapStyle === "broadcast" ? "url(#municipalBroadcastGlow)" : undefined}
                     className="cursor-pointer transition-colors duration-150 hover:brightness-125"
                     onMouseDown={(event) => handleMunicipalityMouseDown(pathItem.code, event)}
-                    onMouseEnter={(event) => handleMunicipalityMouseEnter(pathItem.code, event)}
+                    onMouseEnter={(event) => {
+                      updateHoveredMunicipality(pathItem, event);
+                      handleMunicipalityMouseEnter(pathItem.code, event);
+                    }}
+                    onMouseMove={(event) => updateHoveredMunicipality(pathItem, event)}
+                    onMouseLeave={() => setHoveredMunicipality(null)}
+                    onContextMenu={(event) => handleMunicipalityContextMenu(pathItem, event)}
                   />
                 );
               })}
             </svg>
           )}
         </div>
+        {hoveredMunicipality && (
+          <div
+            className="pointer-events-none fixed z-[80] rounded-lg border border-slate-600 bg-slate-800/90 px-2.5 py-1.5 text-xs font-bold text-white shadow-xl"
+            style={{ left: hoveredMunicipality.x + 14, top: hoveredMunicipality.y - 28 }}
+          >
+            {hoveredMunicipality.name}
+          </div>
+        )}
+        {contextMenu && (() => {
+          const pathItem = paths.find((path) => path.code === contextMenu.municipalityId);
+          const contextVotes = pathItem ? getContextVotesForPath(pathItem) : null;
+          const tieCandidateIds = getTieCandidateIds(contextVotes ?? undefined);
+          return (
+            <div
+              className="fixed z-[90] w-72 rounded-2xl border border-slate-600 bg-slate-900 p-4 text-white opacity-100 shadow-xl transition-opacity"
+              style={{ left: contextMenu.x + 10, top: contextMenu.y + 10 }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="mb-3 text-base font-black">{contextMenu.name}</div>
+              {contextVotes ? (
+                <div className="mb-4 space-y-2">
+                  {tieCandidateIds.length > 1 && (
+                    <div className="rounded-lg border border-slate-600 bg-slate-800 px-2 py-1 text-xs font-black text-slate-100">
+                      Empate
+                    </div>
+                  )}
+                  {candidates.map((candidate) => (
+                    <div key={candidate.id} className="flex items-center justify-between gap-3 text-xs">
+                      <span className="flex min-w-0 items-center gap-2 font-bold text-slate-200">
+                        <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: candidate.color }} />
+                        <span className="truncate">{candidate.name}</span>
+                      </span>
+                      <span className="font-black" style={{ color: candidate.color }}>
+                        {(contextVotes[candidate.id] ?? 0).toFixed(1)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mb-4 rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 text-sm font-bold text-slate-300">
+                  Nenhum dado pintado ainda
+                </div>
+              )}
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setContextMenu(null)}
+                  className="rounded-lg border border-slate-600 px-3 py-1.5 text-xs font-black text-slate-200"
+                >
+                  Alterar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setContextMenu(null)}
+                  className="rounded-lg bg-slate-700 px-3 py-1.5 text-xs font-black text-white"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          );
+        })()}
       </motion.div>
     </motion.div>
   );

@@ -16,15 +16,20 @@ SOURCES = {
 
 
 def normalize_name(value: str) -> str:
-    return (
-        "".join(
-            char
-            for char in unicodedata.normalize("NFD", value)
-            if unicodedata.category(char) != "Mn"
-        )
-        .lower()
-        .strip()
+    without_accents = "".join(
+        char
+        for char in unicodedata.normalize("NFD", value)
+        if unicodedata.category(char) != "Mn"
     )
+    normalized_chars = []
+    for char in without_accents.lower():
+        if char.isalnum() or char.isspace():
+            normalized_chars.append(char)
+        elif char in {"'", "’", "`", "´", ".", "-", "‐", "‑", "‒", "–", "—", "―"}:
+            normalized_chars.append(" ")
+        else:
+            normalized_chars.append(" ")
+    return " ".join("".join(normalized_chars).split())
 
 
 def read_scenario(path: Path, turn: str):
@@ -120,12 +125,52 @@ def main():
                 + " as Record<HistoricalMunicipalityScenarioKey, Record<string, { number: string; name: string; party: string }>>;",
                 "",
                 "export function normalizeHistoricalMunicipalityName(value: string): string {",
-                "  return value.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLocaleLowerCase('pt-BR').trim();",
+                "  return value",
+                "    .normalize('NFD')",
+                "    .replace(/[\\u0300-\\u036f]/g, '')",
+                "    .toLocaleLowerCase('pt-BR')",
+                "    .replace(/[’'`´]/g, ' ')",
+                "    .replace(/[.\\u2010-\\u2015-]/g, ' ')",
+                "    .replace(/[^a-z0-9\\s]/g, ' ')",
+                "    .replace(/\\s+/g, ' ')",
+                "    .trim();",
+                "}",
+                "",
+                "function buildHistoricalMunicipalityNameVariants(name: string): string[] {",
+                "  const base = normalizeHistoricalMunicipalityName(name);",
+                "  const variants = new Set<string>([base]);",
+                "  const add = (value: string) => {",
+                "    const normalized = value.replace(/\\s+/g, ' ').trim();",
+                "    if (normalized) variants.add(normalized);",
+                "  };",
+                "",
+                "  add(base.replace(/\\s+/g, '-'));",
+                "  add(base.replace(/-/g, ' '));",
+                "  add(base.replace(/\\s+/g, ''));",
+                "  add(base.replace(/\\bd\\s+/g, 'do '));",
+                "  add(base.replace(/\\bd\\s+/g, 'de '));",
+                "  add(base.replace(/\\bdo\\s+/g, 'd '));",
+                "  add(base.replace(/\\bde\\s+/g, 'd '));",
+                "  add(base.replace(/^(de|do|da|dos|das)\\s+/, ''));",
+                "",
+                "  Array.from(variants).forEach((variant) => {",
+                "    add(variant.replace(/\\s+/g, '-'));",
+                "    add(variant.replace(/\\s+/g, ''));",
+                "  });",
+                "",
+                "  return Array.from(variants);",
                 "}",
                 "",
                 "export function getHistoricalMunicipalityVotes(scenarioKey: HistoricalMunicipalityScenarioKey | undefined, uf: string, name: string): HistoricalMunicipalityVotes | undefined {",
                 "  if (!scenarioKey) return undefined;",
-                "  return HISTORICAL_MUNICIPALITY_RESULTS[scenarioKey]?.[`${uf.toUpperCase()}:${normalizeHistoricalMunicipalityName(name)}`];",
+                "  const source = HISTORICAL_MUNICIPALITY_RESULTS[scenarioKey];",
+                "  if (!source) return undefined;",
+                "  const upperUf = uf.toUpperCase();",
+                "  for (const nameVariant of buildHistoricalMunicipalityNameVariants(name)) {",
+                "    const match = source[`${upperUf}:${nameVariant}`];",
+                "    if (match) return match;",
+                "  }",
+                "  return undefined;",
                 "}",
                 "",
                 "export function getHistoricalMunicipalityCandidatePcts(",
@@ -150,13 +195,17 @@ def main():
                 "  if (!votes) return null;",
                 "  let winner: CandidateId | null = null;",
                 "  let winnerPct = -1;",
+                "  let ties = 0;",
                 "  Object.entries(votes).forEach(([id, pct]) => {",
                 "    if (pct > winnerPct) {",
                 "      winner = Number(id);",
                 "      winnerPct = pct;",
+                "      ties = 1;",
+                "    } else if (pct === winnerPct) {",
+                "      ties += 1;",
                 "    }",
                 "  });",
-                "  return winner;",
+                "  return winnerPct > 0 && ties === 1 ? winner : null;",
                 "}",
                 "",
                 "export function buildHistoricalStateResults(",

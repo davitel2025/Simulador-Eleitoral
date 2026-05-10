@@ -293,9 +293,14 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
 
         <div
           ref={captureRef}
-          className="mx-auto rounded-[40px] border border-white/10 p-8"
+          className="relative mx-auto rounded-[40px] border border-white/10 p-8"
           style={{ ...bgStyle, width: 1920, minHeight: 1080, aspectRatio: "16 / 9" }}
         >
+          <div className="absolute right-8 top-8 rounded-full border border-white/10 bg-white/5 px-6 py-3 text-right shadow-2xl backdrop-blur-sm">
+            <div className="text-xl font-black text-white">{Math.round(ranked.totalVotes).toLocaleString("pt-BR")}</div>
+            <div className="mt-0.5 text-[9px] font-black uppercase tracking-[0.28em] text-slate-500">Votos Válidos</div>
+          </div>
+
           <div className="mb-6 text-center">
             <div className="text-[11px] font-black uppercase tracking-[0.6em] text-slate-500">
               Resultado Eleição {scenarioYear ?? 2026} — {stateInfo.name}
@@ -366,12 +371,6 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
             </div>
           )}
 
-          <div className="mt-4 text-center">
-            <div className="inline-block rounded-full bg-white/5 px-12 py-5 border border-white/10 shadow-2xl">
-              <div className="text-4xl font-black text-white">{Math.round(ranked.totalVotes).toLocaleString("pt-BR")}</div>
-              <div className="text-[11px] font-black uppercase tracking-[0.4em] text-slate-500 mt-1">Votos Estimados</div>
-            </div>
-          </div>
         </div>
         <div className="absolute left-[-12000px] top-0">
           {ranked.first && ranked.second && (
@@ -381,6 +380,7 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
                 left={ranked.first}
                 right={ranked.second}
                 bgStyle={bgStyle}
+                totalVotes={ranked.totalVotes}
                 map={
                   <StateMapCenter
                     stateInfo={stateInfo}
