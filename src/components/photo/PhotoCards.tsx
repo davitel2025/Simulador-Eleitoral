@@ -248,6 +248,8 @@ async function downloadCanvasAsPng(
 ): Promise<boolean> {
   try {
     const html2canvas = (await import("html2canvas")).default;
+    const captureWidth = element.scrollWidth;
+    const captureHeight = element.scrollHeight;
     const canvas = await html2canvas(element, {
       backgroundColor,
       scale: Math.max(2, window.devicePixelRatio || 1),
@@ -257,8 +259,10 @@ async function downloadCanvasAsPng(
       imageTimeout: 15000,
       scrollX: 0,
       scrollY: -window.scrollY,
-      windowWidth: document.documentElement.scrollWidth,
-      windowHeight: document.documentElement.scrollHeight,
+      width: captureWidth,
+      height: captureHeight,
+      windowWidth: captureWidth,
+      windowHeight: captureHeight,
       onclone: (clonedDoc) => {
         clonedDoc.querySelectorAll("*").forEach((el) => {
           const htmlEl = el as HTMLElement;
@@ -306,14 +310,24 @@ export async function captureAndDownload(
   try {
     const { toPng } = await import("html-to-image");
     restoreImages = await preloadImagesAsBase64(element);
+    const captureWidth = element.scrollWidth;
+    const captureHeight = element.scrollHeight;
 
     const dataUrl = await toPng(element, {
       backgroundColor,
+      width: captureWidth,
+      height: captureHeight,
+      canvasWidth: captureWidth * Math.max(2, window.devicePixelRatio || 1),
+      canvasHeight: captureHeight * Math.max(2, window.devicePixelRatio || 1),
       pixelRatio: Math.max(2, window.devicePixelRatio || 1),
       cacheBust: true,
       includeQueryParams: true,
       skipFonts: false,
       filter: () => true,
+      style: {
+        width: `${captureWidth}px`,
+        height: `${captureHeight}px`,
+      },
     });
 
     const link = document.createElement("a");

@@ -293,7 +293,7 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
 
         <div
           ref={captureRef}
-          className="relative mx-auto rounded-[40px] border border-white/10 p-8"
+          className="relative mx-auto rounded-[40px] border border-white/10 p-8 pb-16"
           style={{ ...bgStyle, width: 1920, minHeight: 1080, aspectRatio: "16 / 9" }}
         >
           <div className="absolute right-8 top-8 rounded-full border border-white/10 bg-white/5 px-6 py-3 text-right shadow-2xl backdrop-blur-sm">

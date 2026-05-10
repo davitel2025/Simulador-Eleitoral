@@ -333,7 +333,7 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
 
         <div
           ref={captureRef}
-          className="relative mx-auto rounded-[50px] border border-white/10 p-12 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.7)]"
+          className="relative mx-auto rounded-[50px] border border-white/10 p-12 pb-20 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.7)]"
           style={{ ...bgStyle, width: 1920, minHeight: 1080, aspectRatio: "16 / 9" }}
         >
           <div className="absolute right-8 top-8 rounded-full border border-white/10 bg-white/5 px-6 py-3 text-right shadow-2xl backdrop-blur-sm">
