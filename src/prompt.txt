@@ -1,341 +1,134 @@
-# 📋 PROMPT COMPLETO PARA MODIFICAÇÕES NO SIMULADOR ELEITORAL
 
-**Copia e cola este prompt inteiro na tua IA integrada ao terminal.**
 
----
+Você tem acesso ao código completo do projeto Simulador Eleitoral localizado neste repositório. Seu objetivo é implementar todas as modificações listadas abaixo diretamente nos arquivos do projeto, sem pedir confirmação — edite, crie e corrija o que for necessário imediatamente.
 
-## CONTEXTO DO PROJETO
+O projeto é uma aplicação React + TypeScript + Vite + Tailwind CSS + D3-geo + html2canvas. Os principais arquivos relevantes estão em src/, incluindo src/data/presetCandidates.ts, src/data/scenarios.ts, src/data/historicalElectionResults.ts, src/components/screens/ElectionSimulator.tsx, e os componentes de geração de foto (PhotoGenerator e afins). Leia todos os arquivos necessários antes de começar a editar.
+MODIFICAÇÃO 1 — Aumentar ainda mais o zoom do mapa nas fotos (nacional, regional e estadual)
 
-Você vai trabalhar em um **Simulador Eleitoral Brasileiro** — uma aplicação web feita com **React 19 + TypeScript + Vite 7 + Tailwind CSS 4 + Framer Motion + D3-geo + html-to-image + html2canvas**.
-
-O repositório está em: `https://github.com/davitel2025/Simulador-Eleitoral`
-
-### Estrutura de diretórios relevante:
-
-```
-src/
-├── App.tsx                                         # Entry point, gerencia telas (InitialScreen → CandidateSetup → ElectionSimulator)
-├── types.ts                                        # Tipos: Candidate, StateInfo, StateResult, PoliticalScenario, RankedItem, etc.
-├── data/
-│   ├── states.ts                                   # Array STATES[] com uf, name, region, voters, voters2018, voters2022, ibgeCode
-│   ├── presetCandidates.ts                         # URLs de fotos (Wikimedia) e logos dos partidos, array PRESET_CANDIDATES
-│   ├── scenarios.ts                                # Cenários históricos (2018 1t/2t, 2022 1t/2t, 2026 1t/2t) com candidatos e resultados
-│   ├── historicalElectionResults.ts                # JSON gigante com votos por município (HISTORICAL_MUNICIPALITY_RESULTS) e porcentagens por estado (HISTORICAL_STATE_RESULTS_BY_NUMBER). Também tem funções helper: getHistoricalMunicipalityCandidatePcts(), buildHistoricalStateResults(), normalizeHistoricalMunicipalityName()
-│   └── data_cenarios/                              # JSONs de cenários 2026
-├── components/
-│   ├── photo/
-│   │   ├── PhotoCards.tsx                          # Componentes TopCandidateCard, BottomCandidateCard, OthersCard, MapSizeSlider, AvatarSizeControls, PhotoBackgroundPicker, WinnerBoxControls + funções de captura (captureAndDownload, savePhotoPng, preloadImagesAsBase64, resolveCaptureImageUrl, downloadCanvasAsPng)
-│   │   └── MapCenters.tsx                          # Coordenadas dos centros dos estados para posicionamento no mapa
-│   ├── modals/
-│   │   ├── NationalPhotoModal.tsx                  # Modal de foto nacional — captura ref, ranking, controles (shape, avatar, moldura, bg, mapa), layout horizontal com top2 + mapa + bottom3 + total
-│   │   ├── RegionalPhotoModal.tsx                  # Modal de foto regional — parecido com nacional mas filtrado por região
-│   │   ├── StatePhotoModal.tsx                     # Modal de foto estadual — mapa do estado individual
-│   │   ├── MunicipalityPaintModal.tsx              # Modal de pintura de municípios — carrega GeoJSON, permite pintar municípios com candidato, importar cenário histórico
-│   │   ├── StateModal.tsx                          # Modal de edição de votos por estado — sliders por candidato
-│   │   └── StateActionModal.tsx                    # Menu de ações do estado (editar, foto, municípios, resetar, zoom, excluir)
-│   ├── screens/
-│   │   ├── InitialScreen.tsx                       # Tela inicial — seleção de cenário, estados, eleitorado
-│   │   ├── CandidateSetupScreen.tsx                # Tela de configuração de candidatos
-│   │   └── ElectionSimulator.tsx                   # Tela principal do simulador — mapa interativo com zoom, tooltip, context menu, analytics
-│   ├── CandidateManager.tsx                        # Gerenciador de candidatos
-│   └── UserIcon.tsx
-├── hooks/
-│   └── usePersistedState.ts                        # Hook de estado persistido em localStorage
-└── erro.txt                                        # Log de erros CORS do Wikimedia
-```
-
----
+Nos componentes de geração de foto (NationalPhotoCard, RegionalPhotoCard, StatePhotoCard, ou equivalentes onde o mapa SVG do Brasil é renderizado para exportação em PNG), aumente o fator de escala/zoom do mapa. O mapa já tem algum zoom aplicado; quero que ele seja ainda maior — aumente o scale ou viewBox da projeção D3 (ou o transform scale() do SVG) em pelo menos 30–50% a mais do que o valor atual, para que o mapa ocupe mais espaço visual na arte gerada. Ajuste o translate da projeção para manter o mapa centralizado após o aumento.
+MODIFICAÇÃO 2 — Opção de formato ao baixar o PNG (16:9 ou 9:16)
 
-## TAREFAS A EXECUTAR (em ordem de prioridade)
-
----
-
-### 📌 TAREFA 1: Aumentar o zoom máximo do mapa nas fotos (nacional/regional/estadual)
-
-**Arquivos afetados:** `src/components/modals/NationalPhotoModal.tsx`, `src/components/modals/RegionalPhotoModal.tsx`, `src/components/modals/StatePhotoModal.tsx`, `src/components/photo/PhotoCards.tsx` (componente `MapSizeSlider`)
-
-**Problema:** O slider de tamanho do mapa (componente `MapSizeSlider` no PhotoCards.tsx) permite apenas até ~600px de scale atualmente. O usuário quer poder ampliar o mapa ainda mais nas fotos geradas.
-
-**O que fazer:**
-1. No componente `MapSizeSlider` em `PhotoCards.tsx`, aumente o valor **máximo** do `<input type="range">` de `max={600}` (ou o valor atual) para **`max={1200}`**. Verifique qual é o `max` atual e pelo menos duplique.
-2. Em cada um dos três modais de foto (`NationalPhotoModal.tsx`, `RegionalPhotoModal.tsx`, `StatePhotoModal.tsx`), verifique se o `localMapScale` (estado que controla o tamanho do mapa na área capturada) está sendo corretamente aplicado como `width` e `height` no SVG/Container do mapa dentro da área `captureRef`. Aumente qualquer limitação artificial que impeça o mapa de crescer além de certo tamanho.
-3. Garanta que o mapa dentro da área de captura PNG não seja cortado — se o `overflow` do container estiver `hidden`, mude para `visible` ou ajuste o container para crescer com o mapa.
-4. Mantenha a responsividade: o mapa na área de captura pode ser maior que a tela — o que importa é que o PNG final capture corretamente.
-
----
-
-### 📌 TAREFA 2: Opção de layout de download (16:9 ou 9:16) ao baixar PNG
-
-**Arquivos afetados:** `src/components/modals/NationalPhotoModal.tsx`, `src/components/modals/RegionalPhotoModal.tsx`, `src/components/modals/StatePhotoModal.tsx`, `src/components/photo/PhotoCards.tsx`
-
-**O que fazer:**
-1. **Antes de cada botão de download ("Salvar PNG")** nos três modais de foto, adicione um **seletor de layout** com duas opções: **"16:9 Paisagem"** e **"9:16 Retrato (celular)"**. Use botões toggle ou radio buttons estilizados, com visual compacto e inline.
-2. O estado desse seletor (ex: `downloadLayout: "16:9" | "9:16"`) deve ser persistido com `usePersistedState` (como já é feito com outras configurações).
-3. **Layout 16:9 (paisagem):** É o layout já existente — mantenha exatamente como está. Apenas garanta que a área capturada (`captureRef`) tenha proporção próxima de 16:9 (se já não tiver, ajuste o padding/container).
-4. **Layout 9:16 (retrato/celular):** Está detalhado na **TAREFA 3** abaixo.
-5. Na hora do download, a função `handleDownload` deve usar a ref correta conforme o layout selecionado. Se for "9:16", usar a ref do container vertical; se for "16:9", usar a ref do container horizontal.
-6. **O layout 9:16 só deve estar disponível quando a eleição estiver em segundo turno** (ou seja, `electionRound === "segundo"` ou quando o cenário tem `round: "segundo"` e tem exatamente 2 candidatos). Se estiver em primeiro turno, o botão de 9:16 deve estar desabilitado (disabled, com tooltip "Disponível apenas no 2º turno").
-
----
-
-### 📌 TAREFA 3: Layout 9:16 (formato celular / stories) para segundo turno
-
-**Arquivos afetados:** `src/components/modals/NationalPhotoModal.tsx` (principalmente), e possivelmente `RegionalPhotoModal.tsx` e `StatePhotoModal.tsx` se fizer sentido.
-
-**Especificações detalhadas do layout 9:16:**
-
-Quando o usuário selecionar "9:16 Retrato" e estiver em segundo turno, a área capturada (`captureRef`) deve renderizar um layout completamente diferente do layout horizontal padrão. Este layout deve ter **formato vertical (9:16)**, pensado para celular e stories.
-
-**Estrutura do layout (de cima para baixo):**
-
-#### Topo
-- **Título pequeno centralizado** no alto da imagem, tipo `"Resultado Eleição 2026"` em fonte pequena-média (14-16px), cor branca com leve opacidade, centralizado.
-
-#### Área superior/média (os dois candidatos lado a lado)
-- **Os dois candidatos do segundo turno** posicionados **lado a lado** na metade superior da imagem.
-- Cada candidato deve manter:
-  - **Card de foto** com cantos arredondados (border-radius ~12px), borda colorida de 3-4px na cor do partido (`candidate.color`), e sombra discreta (`box-shadow: 0 4px 12px rgba(0,0,0,0.3)`).
-  - **Foto do candidato** dentro do card (formato retrato/portrait, ~3:4). Se não houver foto, mostrar placeholder com o número.
-  - **Nome em branco**, fonte grossa (`font-weight: 700-800`), fonte ~16-18px, centralizado abaixo da foto.
-  - **Informações menores** em pequenos blocos escuros arredondados (bg rgba preto, border-radius 8px, padding 2px 8px):
-    - Vice (ex: `"Vice: Hamilton Mourão"`)
-    - Espectro ideológico (ex: `"Direita / conservador"`)
-    - Slogan/coligação se houver
-- **Espaçamento:** Os dois cards ficam um de cada lado (esquerda e direita) com um gap de ~16-24px entre eles.
-
-#### Área central (mapa do Brasil)
-- **Mapa do Brasil centralizado** logo abaixo dos candidatos.
-- O mapa deve ser **maior que no layout horizontal**, ocupando bem o centro da arte, mas sem encostar nos textos.
-- Preserve todas as cores dos estados (gradiente do vencedor), contornos e estilo flat/sombreado do mapa original.
-- O mapa deve ser renderizado usando o mesmo SVG que já existe no layout horizontal, apenas redimensionado para caber melhor no centro do layout vertical.
-- Use o `localMapScale` ajustado para o formato vertical — o default para 9:16 deve ser ~400-500px de largura.
-
-#### Área inferior (percentuais)
-- **Percentuais GRANDES** na parte inferior, alinhados com cada candidato:
-  - Percentual do candidato da **esquerda** no **canto inferior esquerdo**.
-  - Percentual do candidato da **direita** no **canto inferior direito**.
-- **Fonte:** Os percentuais devem ser o **maior elemento textual** da composição — use tamanho ~48-64px, `font-weight: 900`, cor branca.
-- **Cor de destaque:** Cada percentual pode ter a cor do candidato como `color` ou como sombra/contorno sutil.
-- **Abaixo de cada percentual**, em texto pequeno (~12-14px, opacidade 0.7): o número de votos absolutos formatado com `toLocaleString("pt-BR")`.
-- **Total de votos válidos** opcionalmente no rodapé, em texto bem pequeno.
-
-#### Estilo geral do layout 9:16
-- **Background:** O mesmo background configurado pelo `PhotoBackgroundPicker` (cor sólida, gradiente ou imagem). Default: `#0f172a`.
-- **Dimensões da área capturada:** Proporção 9:16 (ex: 540×960, 1080×1920, etc). O container deve ter `width` fixo e `height` proporcional.
-- **Fontes e cores:** Manter o mesmo padrão visual do layout horizontal — fontes brancas/slate, blocos escuros, bordas coloridas.
-- **A área capturada para download** deve ser um container separado (não o mesmo do layout 16:9). Use uma segunda `ref` (ex: `captureRefVertical`).
-
-**Implementação prática:**
-1. Crie um novo componente (ou bloco JSX condicional dentro do NationalPhotoModal) que renderiza o layout 9:16 quando `downloadLayout === "9:16"`.
-2. Esse componente deve receber as mesmas props/dados que o layout horizontal usa (ranking, candidates, national, mapa, etc).
-3. O container deve ter estilo inline: `width: 540px; aspect-ratio: 9/16; position: relative; overflow: hidden;`.
-4. O mapa deve ser renderizado com o mesmo SVG do Brasil já utilizado, usando o `localMapScale` (ou um novo estado `verticalMapScale`).
-5. No `handleDownload`, quando `downloadLayout === "9:16"`, usar a `captureRefVertical` em vez da `captureRef` padrão.
-
----
-
-### 📌 TAREFA 4: [BUG FIX] Importar cenário histórico de municípios está quebrado — todos os municípios ficam com a mesma porcentagem
-
-**Arquivos afetados:** `src/components/modals/MunicipalityPaintModal.tsx`, `src/data/historicalElectionResults.ts`
-
-**Problema detalhado:** Quando o usuário importa um cenário histórico (ex: Eleições 2018 2º turno) e clica em "Importar cenário histórico" dentro do modal de municípios, o resultado é que **todos os municípios ficam com porcentagens iguais** para todos os candidatos, e apenas um candidato aparece ganhando em todos os municípios.
-
-**Análise da causa provável:**
-
-No `MunicipalityPaintModal.tsx`, a função `handleImportHistoricalScenario` faz:
-
-```ts
-const votes = getHistoricalMunicipalityCandidatePcts(
-  scenarioKey,
-  stateInfo.uf,
-  path.name,
-  candidates
-);
-const winner = getHistoricalWinnerCandidateId(votes);
-if (!votes || !winner) return;
-nextPaint[path.code] = winner;
-nextMunicipalities[path.code] = votes;
-```
-
-A função `getHistoricalMunicipalityCandidatePcts` (em `historicalElectionResults.ts`) faz:
-
-```ts
-export function getHistoricalMunicipalityCandidatePcts(
-  scenarioKey, uf, name, candidates
-) {
-  const votesByNumber = getHistoricalMunicipalityVotes(scenarioKey, uf, name);
-  // ... calcula porcentagens baseado nos números dos candidatos
-}
-```
-
-E `getHistoricalMunicipalityVotes` busca no `HISTORICAL_MUNICIPALITY_RESULTS` usando a chave `"UF:nome_normalizado"`.
-
-**Possíveis causas:**
-1. **Normalização de nome:** `normalizeHistoricalMunicipalityName` remove acentos e converte para minúsculas, mas o nome do município no GeoJSON pode estar em formato diferente (capitalizado, com espaços extras, etc.) vs. o nome nos dados históricos. Se não bater, `getHistoricalMunicipalityVotes` retorna `undefined`, e o município não recebe dados.
-2. **Matching por número de candidato:** Os dados históricos usam **número do candidato** (ex: `"17"` para Bolsonaro em 2018). Mas os IDs dos candidatos no cenário importado são **1, 2, 3...** (index + 1). A função `getHistoricalMunicipalityCandidatePcts` tenta fazer o match usando `candidate.number`, mas se o `candidates` array passado para a função não tiver os `.number` corretos (porque os IDs foram reatribuídos no `handleSelectScenario` do App.tsx com `candidatesWithIds: Candidate[] = scenario.candidates.map((c, i) => ({ ...c, id: i + 1 }))`), o `.number` deve estar correto. Verifique se o `candidate.number` bate com os números nos dados históricos.
-3. **Estrutura dos votos municipais:** O `HISTORICAL_MUNICIPALITY_RESULTS` tem votos absolutos por número de candidato. Quando converte para porcentagem, se os `candidate.number` não baterem, todos os votos vão para 0 e apenas um candidato (o primeiro) vence por padrão.
-
-**O que fazer para corrigir:**
-1. **Adicione logging temporário** na função `handleImportHistoricalScenario` do `MunicipalityPaintModal.tsx` para ver:
-   - Quantos municípios estão sendo encontrados (`votes !== undefined`)
-   - Quais são os valores de `path.name` vs. os nomes normalizados esperados
-   - Se os `candidate.number` estão batendo com as chaves em `votesByNumber`
-2. **Melhore a normalização de nomes** em `normalizeHistoricalMunicipalityName`. Além de remover acentos e lowercase, também:
-   - Remova espaços extras no início/fim
-   - Substitua múltiplos espaços por um único
-   - Remova caracteres especiais como hífens, pontos
-   - Compare com `includes()` ou `startsWith()` como fallback se o match exato falhar
-3. **Garanta que o `candidate.number`** do array `candidates` passado para `getHistoricalMunicipalityCandidatePcts` seja uma **string** (não number). Nos dados históricos, as chaves são strings (`"17"`, `"13"`, etc.). Se `candidate.number` for `"17"` e a chave for `"17"`, funciona. Mas se houver tipo diferente (number vs string), o match falha.
-4. **Teste especificamente o cenário de 2018 2º turno** (Bolsonaro nº17 vs Haddad nº13). Confirme que ao importar o cenário no estado do Acre (AC), os municípios de Rio Branco, Cruzeiro do Sul, etc. recebem porcentagens diferentes.
-5. **Remove o logging temporário** após confirmar que funciona.
-
----
-
-### 📌 TAREFA 5: Menu de contexto (botão direito) ao editar municípios
-
-**Arquivos afetados:** `src/components/modals/MunicipalityPaintModal.tsx`
-
-**Problema:** Atualmente, no modal de pintura de municípios, o usuário só pode pintar clicando (botão esquerdo) para atribuir um candidato ao município. Não há como ver rapidamente o nome e porcentagem de cada município, nem editar a porcentagem diretamente.
-
-**O que fazer:**
-1. **Adicione um handler `onContextMenu`** em cada `<path>` de município no `MunicipalityPaintModal.tsx`. Atualmente, o SVG tem `onContextMenu={(event) => event.preventDefault()}`. Mude para abrir um menu flutuante.
-2. **O menu de contexto** deve aparecer na posição do cursor e conter:
-   - **Nome do município** (em negrito, no topo do menu)
-   - **Porcentagem por candidato:** Para cada candidato no cenário, mostrar:
-     - Nome do candidato (ou pelo menos partido/número)
-     - Porcentagem atual daquele município (se existir em `municipalities[path.code]`)
-     - Um **mini slider** ou **input numérico** para alterar a porcentagem
-   - **Indicação do vencedor atual** (municipality colored)
-   - **Botão "Limpar"** para resetar o município
-   - **Botão "Fechar"** ou fechar ao clicar fora
-3. **Estado do menu de contexto:** Adicione um estado como:
-   ```ts
-   const [municipalityContextMenu, setMunicipalityContextMenu] = useState<{
-     code: string;
-     name: string;
-     x: number;
-     y: number;
-   } | null>(null);
-   ```
-4. **Handler onContextMenu por município:**
-   ```ts
-   onContextMenu={(event) => {
-     event.preventDefault();
-     event.stopPropagation();
-     const rect = svgRef.current?.getBoundingClientRect();
-     if (!rect) return;
-     setMunicipalityContextMenu({
-       code: pathItem.code,
-       name: pathItem.name,
-       x: event.clientX - rect.left,
-       y: event.clientY - rect.top,
-     });
-   }}
-   ```
-5. **Fechar o menu** ao clicar fora ou ao pressionar Escape:
-   ```ts
-   // useEffect para listener de click/keydown
-   ```
-6. **Estilo do menu:** Siga o mesmo padrão visual do context menu que já existe no mapa principal (`ElectionSimulator.tsx` — procure por `contextMenu && contextStateInfo`): fundo escuro (`bg-slate-900/95`), bordas arredondadas, backdrop-blur, shadow, etc.
-7. **Ao alterar a porcentagem no mini slider/input:** Atualize o estado `municipalities[code]` com os novos valores. Garanta que as porcentagens somem 100% (ou redistribua proporcionalmente).
-
----
-
-### 📌 TAREFA 6: [BUG FIX] Imagens dos candidatos de 2018 não carregam (problema CORS)
-
-**Arquivos afetados:** `src/data/presetCandidates.ts`, `src/components/photo/PhotoCards.tsx`
-
-**Problema documentado em `src/erro.txt`:** Várias imagens do Wikimedia Commons estão bloqueadas por CORS. O console mostra erros como:
-
-```
-Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at
-https://commons.wikimedia.org/wiki/Special:FilePath/...
-```
-
-Imagens afetadas incluem (mas não se limitam a):
-- `2022_SAMARA_MARTINS_CANDIDATO_VICE-PRESIDENTE_TSE_(280001602703).jpg`
-- `Fl%C3%A1vio_Bolsonaro.jpg`
-- `OOjs_UI_icon_userAvatar.svg` (placeholder)
-- `Romeu_Zema_2025_(cropped).jpg`
-- `Partido_Liberal_(Brazil)_logo.svg`
-- `Partido_Novo_logo_(2023).svg`
-- `Unidade_Popular_Logo.svg`
-- `Luiz-felipe-davila_retrato.jpg`
-
-**Análise do código atual:**
-
-O arquivo `PhotoCards.tsx` já tem um mecanismo de conversão de imagens para base64 antes da captura:
-
-1. `preloadImagesAsBase64()` — converte todas as `<img>` dentro do container para base64 antes de capturar.
-2. `resolveCaptureImageUrl()` — para URLs do Wikimedia (`commons.wikimedia.org/wiki/Special:`), faz uma chamada à API do Wikimedia (`/w/api.php?action=query&prop=imageinfo`) para obter a URL direta da imagem.
-3. Usa `fetch(resolvedUrl, { mode: "cors" })` para baixar e converter.
-
-**O problema:** Muitas URLs no `presetCandidates.ts` usam o formato direto do Wikimedia (`https://upload.wikimedia.org/...`) que **não** passam pelo `resolveCaptureImageUrl` (que só atua em URLs contendo `commons.wikimedia.org/wiki/Special:`). As URLs diretas do `upload.wikimedia.org` podem ter headers CORS restritivos, fazendo o fetch falhar.
-
-Além disso, algumas URLs usam o helper `commonsFile()` que gera URLs no formato `https://commons.wikimedia.org/wiki/Special:FilePath/...` — essas DEVEM passar pelo resolver, mas se o resolver falhar (timeout, erro na API), a imagem fica em branco.
-
-**O que fazer para corrigir:**
-
-1. **Unifique todas as URLs de imagem para usar o formato `commons.wikimedia.org/wiki/Special:FilePath/...`** em vez de URLs diretas do `upload.wikimedia.org`. No `presetCandidates.ts`, mude todas as URLs que usam o formato direto para usar a função `commonsFile()` que já existe no arquivo:
-
-   ```ts
-   const commonsFile = (fileName: string, width = 500) =>
-     `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(fileName)}?width=${width}`;
-   ```
-   
-   Por exemplo, mude:
-   ```ts
-   lula: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Lula_%282023%29_%28cropped%29.jpg/500px-Lula_%282023%29_%28cropped%29.jpg"
-   ```
-   Para:
-   ```ts
-   lula: commonsFile("Lula_(2023)_(cropped).jpg")
-   ```
-
-   Faça isso para TODAS as URLs em `CANDIDATE_IMAGES` e `PARTY_LOGOS` que usam URLs diretas do upload.wikimedia.org. O nome do arquivo é a parte após `/commons/thumb/.../` ou `/commons/.../`.
-
-2. **Melhore o `resolveCaptureImageUrl`** em `PhotoCards.tsx` para ser mais robusto:
-   - Adicione **timeout** de 5 segundos no fetch da API do Wikimedia
-   - Se a API falhar, tente montar a URL direta do thumbnail manualmente (formato: `https://upload.wikimedia.org/wikipedia/commons/thumb/HASH/FILENAME/WIDTHpx-FILENAME`)
-   - Como fallback final, retorne a URL original
-
-3. **Adicione tratamento de erro visual:** Se uma imagem de candidato não carregar (onerror no `<img>`), substitua por um placeholder com a inicial do nome ou número do candidato (como já é feito em alguns lugares).
-
-4. **Para as imagens que NUNCA funcionam via Wikimedia** (SVGs de logos que consistentemente falham CORS), considere hospedar como assets locais (arquivos na pasta `public/images/`) ou usar a API do Wikimedia de forma diferente (baixar e embutir como data URI no momento do build, ou usar um proxy).
-
-5. **Teste especificamente as imagens de 2018:** Bolsonaro 2018, Fernando Haddad, Hamilton Mourão, Manuela d'Ávila, e os logos do PSL e PT. Estas são as mais críticas para o cenário de 2018.
-
----
-
-## INSTRUÇÕES GERAIS DE IMPLEMENTAÇÃO
-
-1. **Não quebre funcionalidades existentes.** Antes de cada alteração, entenda o código que já funciona. Teste mentalmente cada mudança.
-
-2. **Siga o padrão visual e de código existente:**
-   - Use Tailwind CSS para estilização
-   - Use `usePersistedState` do `src/hooks/usePersistedState.ts` para configurações que devem persistir
-   - Use `useMemo` para cálculos pesados (ranking, etc.)
-   - Mantenha o padrão de componentes com props tipadas em TypeScript
-
-3. **Cada modal de foto tem um padrão consistente** com controles no topo e área capturada abaixo. Siga esse padrão ao adicionar o layout 9:16.
-
-4. **Para a função de download**, use `savePhotoPng` (de `PhotoCards.tsx`) que já lida com conversão de imagens e fallback entre `html-to-image` e `html2canvas`.
-
-5. **Teste o build** com `npm run build` após todas as alterações. Corrija erros de TypeScript antes de finalizar.
-
-6. **Mensagens em português** para qualquer texto novo na interface.
-
----
-
-## RESUMO DAS MUDANÇAS
-
-| # | Tarefa | Tipo | Prioridade |
-|---|--------|------|------------|
-| 1 | Aumentar zoom máximo do mapa nas fotos | Feature | Média |
-| 2 | Seletor de layout 16:9 / 9:16 no download | Feature | Alta |
-| 3 | Layout 9:16 (formato celular) para 2º turno | Feature | Alta |
-| 4 | Bug: importação de cenário histórico de municípios | Bug Fix | Crítica |
-| 5 | Menu de contexto (botão direito) em municípios | Feature | Alta |
-| 6 | Bug: imagens CORS de candidatos 2018 | Bug Fix | Alta |
-
-**Execute na ordem 4 → 6 → 1 → 2 → 3 → 5** (bugs primeiro, depois features em ordem de dependência).
+Atualmente, ao clicar em "Baixar PNG" nas fotos (nacional, regional, estadual), só existe um layout. Adicione uma tela/modal de seleção de formato antes do download, com duas opções:
+Formato 16:9 (já existente)
+
+    Mantém o layout horizontal atual, apenas garantindo que ele se adapte corretamente à proporção 16:9.
+    Dimensões recomendadas para exportação: 1920×1080px (ou o equivalente já usado no projeto).
+
+Formato 9:16 (novo — "layout de celular")
+
+    Disponível apenas quando a eleição for de segundo turno (electionRound === "segundo"). Se for primeiro turno, essa opção deve aparecer desabilitada (cinza, com tooltip explicando que só está disponível no 2º turno).
+
+    Dimensões para exportação: 1080×1920px.
+
+    Layout vertical com os seguintes elementos, de cima para baixo, com fundo escuro (#0f172a ou similar) igual ao estilo já usado no projeto:
+
+        Topo: Título centralizado pequeno (ex: "Resultado — 2º Turno 2026") em fonte pequena, com leve opacidade.
+
+        Área superior/média (≈ 40% da altura): Os dois candidatos lado a lado ocupando a largura total.
+            Cada candidato: card com foto em formato portrait (cantos arredondados, borda colorida com a cor do partido do candidato, sombra suave box-shadow).
+            Abaixo da foto de cada candidato: nome em branco, fonte grossa (font-bold ou font-extrabold).
+            Abaixo do nome: três pequenos blocos escuros arredondados (estilo badge/pill) contendo, respectivamente: vice, espectro ideológico (ideology) e slogan/coalizão (coalition). Fonte bem pequena.
+
+        Área central (≈ 30% da altura): Mapa do Brasil centralizado, maior que no layout horizontal, com as mesmas cores de estados, contornos e estilo visual (flat, com sombra) já usados no projeto. Preservar transparência de fundo para que o fundo do card apareça.
+
+        Área inferior (≈ 30% da altura): Percentuais e votos dos dois candidatos.
+            O percentual do candidato da esquerda (candidato[0]) aparece no canto inferior esquerdo.
+            O percentual do candidato da direita (candidato[1]) aparece no canto inferior direito.
+            O percentual deve ser o maior elemento textual da composição (fonte muito grande, font-extrabold), colorido com a cor do partido de cada candidato.
+            Abaixo do percentual: número de votos em texto pequeno, branco com opacidade reduzida.
+
+    Todo o estilo visual (gradientes de fundo, tipografia, cores de borda, sombras) deve seguir o mesmo padrão já estabelecido no projeto nos cards de foto existentes.
+
+Implementação técnica sugerida:
+
+    Crie um componente separado, ex: VerticalPhotoCard.tsx (ou equivalente dentro da estrutura já existente de geração de foto do projeto).
+    Use html2canvas (já instalado) para exportar o DOM renderizado em 1080×1920, da mesma forma que o layout horizontal já faz.
+    O modal de seleção pode ser um simples overlay/dialog com dois botões: "16:9 (Horizontal)" e "9:16 (Celular)". Se for primeiro turno, o botão 9:16 fica desabilitado.
+
+MODIFICAÇÃO 3 — Corrigir bug de porcentagens iguais ao alterar municípios e ao importar cenário de 2018
+
+Bug reportado: Quando o usuário está na tela de "alterar por município" (tela MunicipalityPainterScreen ou o dialog equivalente dentro de ElectionSimulator), ao abrir um estado e editar as porcentagens municipais, todos os municípios mostram a mesma porcentagem para todos os candidatos, e apenas um candidato aparece como vencedor em todos os municípios, independente dos valores reais.
+
+Causa provável: A função que lê os votos municipais (municipalities dentro de StateResult) ou a função que calcula o vencedor por município (municipalityPaint) está usando índices de candidato incorretos (provavelmente sempre 1 ao invés do ID real do candidato) ou está lendo o campo errado do estado. Verifique especialmente:
+
+    A função buildHistoricalStateResults em src/data/historicalElectionResults.ts — ela mapeia candidatos pelo index + 1 como chave de ID, mas os dados históricos de município usam o número eleitoral do candidato como chave. A função getHistoricalMunicipalityCandidatePcts converte corretamente por candidate.number, mas verifique se o resultado é aplicado ao StateResult.municipalities com as chaves corretas (IDs dos candidatos do cenário atual, não números eleitorais).
+    No componente de pintura de municípios, verifique se ao calcular winnerPct e winnerIndex para exibição, o código está buscando pelo candidate.id correto e não pelo index ou number.
+    Ao importar um cenário histórico (ex: "Eleições 2018"), os candidatos recebem id: index + 1 em App.tsx (handleSelectScenario). Confirme que esse ID bate com as chaves usadas em StateResult.votes e StateResult.municipalities.
+
+Corrija o bug garantindo que:
+
+    Ao carregar um cenário histórico com municipalityResultStrategy, os dados municipais são corretamente carregados com as chaves de ID dos candidatos do cenário atual.
+    A exibição no mapa de municípios mostra corretamente quem venceu cada município com a porcentagem real.
+    Ao editar manualmente a porcentagem de um município via slider, o valor é salvo e exibido corretamente, sem sobrescrever com valores iguais para todos.
+
+MODIFICAÇÃO 4 — Menu de contexto ao clicar com o botão direito em município
+
+Atualmente, o botão direito do mouse em estados abre um menu de contexto (contextMenu) com opções como "Editar votos", "Gerar foto", etc. Implemente o mesmo comportamento para municípios quando o usuário está no modo de mapa municipal (mapMunicipalityMode === true).
+
+Ao clicar com o botão direito em um município no mapa:
+
+    Previna o comportamento padrão do browser (event.preventDefault()).
+    Abra um pequeno menu flutuante posicionado perto do cursor com:
+        Nome do município (ex: "São Paulo") em destaque no topo do menu, em fonte bold.
+        UF do estado logo abaixo do nome, em texto pequeno com opacidade.
+        Porcentagem atual do vencedor naquele município (ex: "Candidato X — 62,3%"), colorida com a cor do candidato vencedor.
+        Botão/opção clicável: "✏️ Alterar porcentagem" — ao clicar, abre um mini-dialog/modal inline (pode ser o mesmo padrão visual já usado no projeto) onde o usuário pode ajustar a porcentagem de cada candidato naquele município via slider ou input numérico, e confirmar.
+    O menu deve fechar ao clicar em qualquer outro lugar da tela (mesmo comportamento do contextMenu de estados).
+
+Implementação:
+
+    Crie um estado municipalityContextMenu (análogo ao contextMenu já existente para estados) com campos: { uf: string, code: string, name: string, x: number, y: number } | null.
+    Adicione o onContextMenu nos paths de município dentro do SVG (na seção mapMunicipalityMode ? activeMunicipalityPaths.map(...) do componente).
+    Renderize o menu flutuante no mesmo container que já renderiza o contextMenu dos estados, logo abaixo (ou em paralelo).
+    O mini-dialog de edição de porcentagem por município deve salvar os valores no results[uf].municipalities[code] e recalcular o municipalityPaint[code] com base no candidato de maior porcentagem.
+
+MODIFICAÇÃO 5 — Corrigir imagens CORS dos candidatos de 2018 (e logos de partidos)
+
+Problema: Vários candidatos e logos de partidos usam URLs do commons.wikimedia.org/wiki/Special:FilePath/... via a função commonsFile() em src/data/presetCandidates.ts. Essas URLs fazem um redirect 302 para o arquivo real, mas o browser bloqueia o redirect por política CORS, resultando nos erros documentados em src/erro.txt.
+
+Candidatos/logos afetados (todos usando commonsFile()):
+
+    marinaSilva → commonsFile("Marina_Silva_2023.jpg")
+    caboDaciolo → commonsFile("Cabo_Daciolo.jpg")
+    PARTY_LOGOS.patri → commonsFile("Patriota_51_logo.png")
+    PARTY_LOGOS.rede → commonsFile("Rede_Sustentabilidade_logo.svg")
+    E todos os outros que usam commonsFile(): henriqueMeirelles, veraLucia, alvaroDias, constituinteEymael, guilhermeBoulos, joaoGoulartFilho, leoPericles, PARTY_LOGOS.pstu, PARTY_LOGOS.pode, PARTY_LOGOS.dc, PARTY_LOGOS.psol, PARTY_LOGOS.ppl.
+
+Solução: Substitua todas as chamadas commonsFile(filename) por URLs diretas do Wikimedia que não usam redirect e têm CORS liberado. O padrão correto é:
+
+text
+
+https://upload.wikimedia.org/wikipedia/commons/thumb/[A]/[AB]/[NomeDoArquivo]/500px-[NomeDoArquivo]
+
+ou para arquivos sem miniatura (PNG/JPG diretos não-SVG):
+
+text
+
+https://upload.wikimedia.org/wikipedia/commons/[A]/[AB]/[NomeDoArquivo]
+
+Para cada arquivo afetado, encontre a URL direta correta do Wikimedia (sem /wiki/Special:FilePath/). Use as seguintes URLs diretas substitutas:
+
+    Marina_Silva_2023.jpg → https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Marina_Silva_2023.jpg/500px-Marina_Silva_2023.jpg
+    Cabo_Daciolo.jpg → https://upload.wikimedia.org/wikipedia/commons/thumb/7/7d/Cabo_Daciolo.jpg/500px-Cabo_Daciolo.jpg
+    Patriota_51_logo.png → https://upload.wikimedia.org/wikipedia/commons/thumb/2/2c/Patriota_51_logo.png/500px-Patriota_51_logo.png
+    Rede_Sustentabilidade_logo.svg → https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Rede_Sustentabilidade_logo.svg/500px-Rede_Sustentabilidade_logo.svg.png
+    Henrique_Meirelles_2017.jpg → https://upload.wikimedia.org/wikipedia/commons/thumb/4/48/Henrique_Meirelles_2017.jpg/500px-Henrique_Meirelles_2017.jpg
+    Alvaro_Dias_Senador.jpg → https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Alvaro_Dias_Senador.jpg/500px-Alvaro_Dias_Senador.jpg
+    Guilherme_Boulos_2024.jpg → https://upload.wikimedia.org/wikipedia/commons/thumb/b/b6/Guilherme_Boulos_2024.jpg/500px-Guilherme_Boulos_2024.jpg
+    Podemos_(Brazil)_logo.svg → https://upload.wikimedia.org/wikipedia/commons/thumb/6/62/Podemos_%28Brazil%29_logo.svg/500px-Podemos_%28Brazil%29_logo.svg.png
+    PSTU_logo.svg → https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/PSTU_logo.svg/500px-PSTU_logo.svg.png
+    Democracia_Cristã_logo.svg → https://upload.wikimedia.org/wikipedia/commons/thumb/e/e2/Democracia_Crist%C3%A3_logo.svg/500px-Democracia_Crist%C3%A3_logo.svg.png
+    PSOL_logo.svg → https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PSOL_logo.svg/500px-PSOL_logo.svg.png
+    Partido_Pátria_Livre_logo.png → https://upload.wikimedia.org/wikipedia/commons/thumb/f/fe/Partido_P%C3%A1tria_Livre_logo.png/500px-Partido_P%C3%A1tria_Livre_logo.png
+    Para os arquivos TSE (candidatos com URLs diretas já existentes — veraLucia, constituinteEymael, leoPericles, joaoGoulartFilho) que também usam commonsFile(), substitua igualmente pelas URLs diretas do Wikimedia sem o Special:FilePath.
+
+Ação: Remova a função commonsFile() ou mantenha-a apenas para referência, e substitua cada uso por uma string de URL direta conforme o padrão acima. Se alguma URL específica não estiver listada aqui, construa-a manualmente no padrão https://upload.wikimedia.org/wikipedia/commons/thumb/... pesquisando o hash de diretório correto no Wikimedia Commons, ou use um proxy CORS público como fallback (ex: https://corsproxy.io/? + encodeURIComponent(url)) apenas para os casos que não tiverem URL direta disponível.
+RESUMO DAS AÇÕES NECESSÁRIAS
+
+    src/data/presetCandidates.ts — Substituir todos os commonsFile() por URLs diretas do Wikimedia sem redirect.
+    Componentes de geração de foto (ex: NationalPhotoCard.tsx, RegionalPhotoCard.tsx, StatePhotoCard.tsx ou equivalentes) — Aumentar zoom do mapa; adicionar modal de seleção 16:9 vs 9:16; criar componente de layout vertical 9:16.
+    src/components/screens/ElectionSimulator.tsx — Adicionar onContextMenu nos paths de município, criar municipalityContextMenu state, renderizar menu flutuante com nome, UF, %, e opção de editar; implementar mini-dialog de edição de porcentagem municipal.
+    src/data/historicalElectionResults.ts e/ou src/data/scenarios.ts e/ou o componente de pintura de municípios — Corrigir o mapeamento de IDs de candidatos nos dados municipais para que cada candidato exiba sua porcentagem correta ao carregar cenário histórico.
+    Após todas as edições, rode npm run build para garantir que o projeto compila sem erros de TypeScript.
+
+Leia todos os arquivos relevantes antes de começar. Implemente tudo de uma vez, arquivo por arquivo.

@@ -6,18 +6,21 @@ import {
   OthersCard,
   TopCandidateCard,
   PhotoBackgroundPicker,
+  PhotoFormatDialog,
   WinnerBoxControls,
   AvatarSizeControls,
   DEFAULT_WINNER_BOX,
+  VerticalPhotoCard,
   captureAndDownload as savePhotoPng,
   getCaptureFallbackColor,
   getFrameSurfaceColor,
   getPhotoBackgroundStyle,
+  type PhotoExportFormat,
   type PhotoCardShape,
   type WinnerBoxConfig,
 } from "../photo/PhotoCards";
 import { NationalMapCenter } from "../photo/MapCenters";
-import type { Candidate, HistoricalMunicipalityScenarioKey, MunicipalityMapStyle, PathData, StateResult } from "../../types";
+import type { Candidate, ElectionRound, HistoricalMunicipalityScenarioKey, MunicipalityMapStyle, PathData, StateResult } from "../../types";
 import {
   clearPersistedStateByPrefix,
   usePersistedState,
@@ -105,6 +108,7 @@ export function NationalPhotoModal({
   onClose,
   scenarioYear,
   municipalityScenarioKey,
+  electionRound,
 }: {
   candidates: Candidate[];
   national: any;
@@ -116,8 +120,10 @@ export function NationalPhotoModal({
   onClose: () => void;
   scenarioYear?: number;
   municipalityScenarioKey?: HistoricalMunicipalityScenarioKey;
+  electionRound: ElectionRound;
 }) {
   const captureRef = useRef<HTMLDivElement>(null);
+  const verticalCaptureRef = useRef<HTMLDivElement>(null);
   const defaultSettings = useMemo<NationalPhotoSettings>(
     () => ({
       localMapScale: photoMapScale,
@@ -141,6 +147,7 @@ export function NationalPhotoModal({
     defaultSettings
   );
   const [resetMessage, setResetMessage] = useState("");
+  const [formatDialogOpen, setFormatDialogOpen] = useState(false);
   const {
     localMapScale,
     bgValue,
@@ -205,13 +212,17 @@ export function NationalPhotoModal({
   const bgStyle = getPhotoBackgroundStyle(bgValue, bgImage);
   const bgFallbackColor = getCaptureFallbackColor(bgValue, bgImage);
   const frameSurfaceColor = getFrameSurfaceColor(bgValue, bgImage);
+  const photoMapSize = Math.round(localMapScale * 1.35);
+  const canUseVertical = electionRound === "segundo" && Boolean(ranked.first && ranked.second);
 
   // ── Download ────────────────────────────────────────────────────────────
-  const handleDownload = async () => {
-    if (!captureRef.current) return;
+  const handleDownloadFormat = async (format: PhotoExportFormat) => {
+    setFormatDialogOpen(false);
+    const target = format === "9:16" ? verticalCaptureRef.current : captureRef.current;
+    if (!target) return;
     await savePhotoPng(
-      captureRef.current,
-      `foto-nacional-${Date.now()}.png`,
+      target,
+      `foto-nacional-${format.replace(":", "x")}-${Date.now()}.png`,
       bgFallbackColor
     );
   };
@@ -398,7 +409,7 @@ export function NationalPhotoModal({
             {/* Salvar */}
             <button
               type="button"
-              onClick={handleDownload}
+              onClick={() => setFormatDialogOpen(true)}
               className="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3 text-sm font-black text-white shadow-lg transition-all hover:scale-105 active:scale-95"
             >
               💾 Salvar PNG
@@ -417,8 +428,8 @@ export function NationalPhotoModal({
         {/* ── Área capturada ──────────────────────────────────────────── */}
         <div
           ref={captureRef}
-          className="rounded-[50px] border border-white/10 p-12 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.7)]"
-          style={bgStyle}
+          className="mx-auto rounded-[50px] border border-white/10 p-12 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.7)]"
+          style={{ ...bgStyle, width: 1920, minHeight: 1080, aspectRatio: "16 / 9" }}
         >
           {/* Título */}
           <div className="mb-6 text-center">
@@ -452,7 +463,7 @@ export function NationalPhotoModal({
               paths={paths}
               results={results}
               candidateById={candidateById}
-              mapSizePx={localMapScale}
+              mapSizePx={photoMapSize}
               showMunicipalities={showMunicipalities}
               municipalityScenarioKey={municipalityScenarioKey}
               shadeMunicipalitiesByPct={shadeByWinMargin}
@@ -527,6 +538,37 @@ export function NationalPhotoModal({
             </div>
           </div>
         </div>
+        <div className="absolute left-[-12000px] top-0">
+          {ranked.first && ranked.second && (
+            <div ref={verticalCaptureRef}>
+              <VerticalPhotoCard
+                title={`Resultado - 2o Turno ${scenarioYear ?? 2026}`}
+                left={ranked.first}
+                right={ranked.second}
+                bgStyle={bgStyle}
+                map={
+                  <NationalMapCenter
+                    paths={paths}
+                    results={results}
+                    candidateById={candidateById}
+                    mapSizePx={760}
+                    showMunicipalities={showMunicipalities}
+                    municipalityScenarioKey={municipalityScenarioKey}
+                    shadeMunicipalitiesByPct={shadeByWinMargin}
+                    municipalityMapStyle={municipalityMapStyle}
+                  />
+                }
+              />
+            </div>
+          )}
+        </div>
+        {formatDialogOpen && (
+          <PhotoFormatDialog
+            canUseVertical={canUseVertical}
+            onSelect={handleDownloadFormat}
+            onClose={() => setFormatDialogOpen(false)}
+          />
+        )}
       </div>
     </motion.div>
   );

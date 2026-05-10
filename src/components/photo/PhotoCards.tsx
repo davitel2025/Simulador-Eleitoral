@@ -1,9 +1,10 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import type { Candidate, RankedItem } from "../../types";
 import { formatPct } from "../../lib/utils";
 import { UserIcon } from "../UserIcon";
 
 export type PhotoCardShape = "circle" | "portrait";
+export type PhotoExportFormat = "16:9" | "9:16";
 type PhotoTypographyProps = {
   fontSizeBase?: number;
   fontColor?: string;
@@ -96,7 +97,7 @@ function useResolvedImageSrc(src?: string): string | undefined {
   return resolvedSrc;
 }
 
-function SafeImage({
+export function SafeImage({
   src,
   alt,
   className,
@@ -564,13 +565,160 @@ export function MapSizeSlider({
       <input
         type="range"
         min={280}
-        max={800}
+        max={1200}
         step={20}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
         className="h-2 w-28 appearance-none rounded-full bg-slate-700 accent-violet-500"
       />
       <span className="text-xs font-bold text-slate-400 w-12 text-right">{value}px</span>
+    </div>
+  );
+}
+
+function VerticalCandidatePanel({ item }: { item: RankedItem }) {
+  const { candidate } = item;
+  const badges = [
+    candidate.vice ? `Vice: ${candidate.vice}` : null,
+    candidate.ideology,
+    candidate.coalition,
+  ].filter(Boolean);
+
+  return (
+    <div className="flex min-w-0 flex-1 flex-col items-center">
+      <div
+        className="mb-5 h-[420px] w-[310px] overflow-hidden rounded-[30px] border-[6px] bg-slate-950 shadow-[0_28px_70px_-34px_rgba(0,0,0,0.9)]"
+        style={{ borderColor: candidate.color }}
+      >
+        {candidate.photo ? (
+          <SafeImage
+            src={candidate.photo}
+            alt={candidate.name}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-7xl font-black" style={{ color: candidate.color }}>
+            {getCandidateInitials(candidate)}
+          </div>
+        )}
+      </div>
+      <div className="max-w-[360px] text-center text-[34px] font-black leading-tight text-white">
+        {candidate.name}
+      </div>
+      <div className="mt-4 flex max-w-[390px] flex-wrap justify-center gap-2">
+        {badges.map((badge) => (
+          <div
+            key={badge}
+            className="max-w-[180px] rounded-full border border-white/10 bg-slate-900/80 px-3 py-2 text-center text-[15px] font-bold leading-tight text-slate-300"
+          >
+            {badge}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function VerticalPhotoCard({
+  title,
+  left,
+  right,
+  map,
+  bgStyle,
+}: {
+  title: string;
+  left: RankedItem;
+  right: RankedItem;
+  map: ReactNode;
+  bgStyle: CSSProperties;
+}) {
+  return (
+    <div
+      className="relative overflow-hidden rounded-[54px] border border-white/10 p-14 text-white shadow-[0_60px_120px_-30px_rgba(0,0,0,0.85)]"
+      style={{ ...bgStyle, width: 1080, height: 1920 }}
+    >
+      <div className="absolute inset-x-0 top-0 h-80 bg-gradient-to-b from-white/10 to-transparent" />
+      <div className="relative z-10 flex h-full flex-col">
+        <div className="mb-12 text-center text-[24px] font-black uppercase tracking-[0.34em] text-slate-400">
+          {title}
+        </div>
+
+        <div className="flex min-h-[620px] items-start justify-center gap-8">
+          <VerticalCandidatePanel item={left} />
+          <VerticalCandidatePanel item={right} />
+        </div>
+
+        <div className="flex min-h-[560px] flex-1 items-center justify-center">
+          <div className="scale-[1.18]">
+            {map}
+          </div>
+        </div>
+
+        <div className="grid min-h-[420px] grid-cols-2 items-end gap-8 pb-8">
+          {[left, right].map((item, index) => (
+            <div
+              key={item.candidate.id}
+              className={`flex flex-col ${index === 0 ? "items-start text-left" : "items-end text-right"}`}
+            >
+              <div
+                className="text-[118px] font-black leading-none tracking-normal"
+                style={{ color: item.candidate.color }}
+              >
+                {formatPct(item.pct)}
+              </div>
+              {item.votes !== undefined && (
+                <div className="mt-3 text-[24px] font-bold text-white/65">
+                  {Math.round(item.votes).toLocaleString("pt-BR")} votos
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function PhotoFormatDialog({
+  canUseVertical,
+  onSelect,
+  onClose,
+}: {
+  canUseVertical: boolean;
+  onSelect: (format: PhotoExportFormat) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-950 p-5 text-white shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mb-1 text-lg font-black">Escolher formato</div>
+        <div className="mb-4 text-sm text-slate-400">Selecione o layout do PNG.</div>
+        <div className="grid gap-3">
+          <button
+            type="button"
+            onClick={() => onSelect("16:9")}
+            className="rounded-xl border border-emerald-400/50 bg-emerald-500/15 px-4 py-4 text-left transition hover:bg-emerald-500/25"
+          >
+            <div className="text-sm font-black text-emerald-100">16:9 Horizontal</div>
+            <div className="mt-1 text-xs font-semibold text-emerald-100/70">Layout atual adaptado para arte widescreen.</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => canUseVertical && onSelect("9:16")}
+            disabled={!canUseVertical}
+            title={canUseVertical ? "Layout vertical para celular" : "Disponivel apenas no 2o turno"}
+            className="rounded-xl border border-cyan-400/50 bg-cyan-500/15 px-4 py-4 text-left transition hover:bg-cyan-500/25 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-900/70 disabled:text-slate-500"
+          >
+            <div className="text-sm font-black">9:16 Celular</div>
+            <div className="mt-1 text-xs font-semibold opacity-70">
+              {canUseVertical ? "Layout vertical 1080x1920." : "Disponivel apenas no segundo turno."}
+            </div>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

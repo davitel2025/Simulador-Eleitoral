@@ -7,8 +7,6 @@ const firstRound2026Candidates = primeiroTurno2026.candidates as PresetCandidate
 const renanSantos2026 = firstRound2026Candidates.find(
   (candidate) => candidate.name === "Renan Santos"
 );
-const commonsFile = (fileName: string, width = 500) =>
-  `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(fileName)}?width=${width}`;
 
 export const CANDIDATE_IMAGES = {
   lula: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Lula_%282023%29_%28cropped%29.jpg/500px-Lula_%282023%29_%28cropped%29.jpg",
@@ -20,14 +18,14 @@ export const CANDIDATE_IMAGES = {
   manuelaDavila: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Manuela_d%27%C3%81vila_Rebele-se_%282%29_%28cropped%29.jpg/500px-Manuela_d%27%C3%81vila_Rebele-se_%282%29_%28cropped%29.jpg",
   bragaNetto: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d0/General_Walter_Braga_Netto.jpg/500px-General_Walter_Braga_Netto.jpg",
   joaoAmoedo: "https://upload.wikimedia.org/wikipedia/commons/5/58/Jo%C3%A3o_Amo%C3%AAdo_-_Entrevista_com_presidenci%C3%A1veis_BTG_Pactual_%28cropped%29.jpg",
-  henriqueMeirelles: commonsFile("Henrique_Meirelles_2017.jpg"),
-  veraLucia: commonsFile("2022_VERA_CANDIDATO_PRESIDENTE_TSE_(280001607831).jpg"),
-  marinaSilva: commonsFile("Marina_Silva_2023.jpg"),
-  alvaroDias: commonsFile("Alvaro_Dias_Senador.jpg"),
-  constituinteEymael: commonsFile("2022_CONSTITUINTE_EYMAEL_CANDIDATO_PRESIDENTE_TSE_(280001677435).jpg"),
-  guilhermeBoulos: commonsFile("Guilherme_Boulos_2024.jpg"),
-  caboDaciolo: commonsFile("Cabo_Daciolo.jpg"),
-  joaoGoulartFilho: commonsFile("João_Goulart_Filho.jpg"),
+  henriqueMeirelles: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/HenriqueMeirelles.jpg/500px-HenriqueMeirelles.jpg",
+  veraLucia: "https://upload.wikimedia.org/wikipedia/commons/8/85/2022_VERA_CANDIDATO_PRESIDENTE_TSE_%28280001607831%29.jpg",
+  marinaSilva: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/db/19-05-2023_Ministra_do_Meio_Ambiente_Marina_Silva_%2852910191114%29.jpg/500px-19-05-2023_Ministra_do_Meio_Ambiente_Marina_Silva_%2852910191114%29.jpg",
+  alvaroDias: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Alvaro_Dias_Senador.jpg/500px-Alvaro_Dias_Senador.jpg",
+  constituinteEymael: "https://upload.wikimedia.org/wikipedia/commons/9/9e/2022_CONSTITUINTE_EYMAEL_CANDIDATO_PRESIDENTE_TSE_%28280001677435%29.jpg",
+  guilhermeBoulos: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/bd/01.05.2024_-_Ato_Unificado_em_Comemora%C3%A7%C3%A3o_do_1%C2%BA_de_Maio_%2853694277180%29.jpg/500px-01.05.2024_-_Ato_Unificado_em_Comemora%C3%A7%C3%A3o_do_1%C2%BA_de_Maio_%2853694277180%29.jpg",
+  caboDaciolo: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6e/Cabo_Daciolo_em_maio_de_2017_%28cropped%29.jpg/500px-Cabo_Daciolo_em_maio_de_2017_%28cropped%29.jpg",
+  joaoGoulartFilho: "https://upload.wikimedia.org/wikipedia/commons/d/d4/Jo%C3%A3o_Goulart_Filho.jpg",
   simoneTebet: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Simone_Tebet_%28cropped%29.jpg/500px-Simone_Tebet_%28cropped%29.jpg",
   maraGabrilli: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/ff/Mara_Gabrilli.jpg/500px-Mara_Gabrilli.jpg",
   ciroGomes: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/Ciro-gomes-ebc_%28cropped%29.jpg/500px-Ciro-gomes-ebc_%28cropped%29.jpg",
@@ -39,7 +37,7 @@ export const CANDIDATE_IMAGES = {
   padreKelmon: "https://upload.wikimedia.org/wikipedia/commons/3/37/2022_PADRE_KELMON_CANDIDATO_PRESIDENTE_TSE_%28280001734029%29.jpg",
   sofiaManzano: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1f/Sofia_Manzano_2022.jpg/500px-Sofia_Manzano_2022.jpg",
   antonioAlves: "https://upload.wikimedia.org/wikipedia/commons/d/d9/2022_ANTONIO_ALVES_CANDIDATO_VICE-PRESIDENTE_TSE_%28280001600166%29.jpg",
-  leoPericles: commonsFile("2022_LEO_PERICLES_CANDIDATO_PRESIDENTE_TSE_(280001602702).jpg"),
+  leoPericles: "https://upload.wikimedia.org/wikipedia/commons/5/53/2022_LEO_PERICLES_CANDIDATO_PRESIDENTE_TSE_%28280001602702%29.jpg",
   lucianoHuck: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/43/Luciano_Huck.jpg/500px-Luciano_Huck.jpg",
   samaraMartins: "https://upload.wikimedia.org/wikipedia/commons/0/08/2022_SAMARA_MARTINS_CANDIDATO_VICE-PRESIDENTE_TSE_%28280001602703%29.jpg",
   renanSantos: renanSantos2026?.photo ?? "",
@@ -61,13 +59,13 @@ export const PARTY_LOGOS = {
   pcb: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/PCB_logo.svg/500px-PCB_logo.svg.png",
   psdb: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9c/Logomarca_do_Partido_da_Social_Democracia_Brasileira.png/500px-Logomarca_do_Partido_da_Social_Democracia_Brasileira.png",
   up: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/04/Unidade_Popular_Logo.svg/500px-Unidade_Popular_Logo.svg.png",
-  pstu: commonsFile("PSTU_logo.svg"),
-  rede: commonsFile("Rede_Sustentabilidade_logo.svg"),
-  pode: commonsFile("Podemos_(Brazil)_logo.svg"),
-  dc: commonsFile("Democracia_Cristã_logo.svg"),
-  psol: commonsFile("PSOL_logo.svg"),
-  patri: commonsFile("Patriota_51_logo.png"),
-  ppl: commonsFile("Partido_Pátria_Livre_logo.png"),
+  pstu: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a6/Logo_PSTU.png/500px-Logo_PSTU.png",
+  rede: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/ca/Logomarca_da_Rede_Sustentabilidade_%28REDE%29%2C_do_Brasil_%28cropped%29.png/500px-Logomarca_da_Rede_Sustentabilidade_%28REDE%29%2C_do_Brasil_%28cropped%29.png",
+  pode: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/PODEMOSLogo_%28from_1997_to_2022%29.png/500px-PODEMOSLogo_%28from_1997_to_2022%29.png",
+  dc: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/08/Logomarca_Democracia_Crist%C3%A3.png/500px-Logomarca_Democracia_Crist%C3%A3.png",
+  psol: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c4/Logomarca_PSOL.png/500px-Logomarca_PSOL.png",
+  patri: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f9/Logomarca_do_Partido_Patriota.png/500px-Logomarca_do_Partido_Patriota.png",
+  ppl: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dc/Partido_P%C3%A1tria_Livre_logo.png/500px-Partido_P%C3%A1tria_Livre_logo.png",
   missao: renanSantos2026?.partyLogo ?? "",
   psd: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/PSD_Brazil_logo.svg/500px-PSD_Brazil_logo.svg.png",
 } as const;

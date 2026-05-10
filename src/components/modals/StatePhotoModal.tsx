@@ -6,18 +6,21 @@ import {
   OthersCard,
   TopCandidateCard,
   PhotoBackgroundPicker,
+  PhotoFormatDialog,
   WinnerBoxControls,
   AvatarSizeControls,
   DEFAULT_WINNER_BOX,
+  VerticalPhotoCard,
   captureAndDownload,
   getCaptureFallbackColor,
   getFrameSurfaceColor,
   getPhotoBackgroundStyle,
+  type PhotoExportFormat,
   type PhotoCardShape,
   type WinnerBoxConfig,
 } from "../photo/PhotoCards";
 import { StateMapCenter } from "../photo/MapCenters";
-import type { Candidate, HistoricalMunicipalityScenarioKey, MunicipalityMapStyle, StateInfo, StateResult } from "../../types";
+import type { Candidate, ElectionRound, HistoricalMunicipalityScenarioKey, MunicipalityMapStyle, StateInfo, StateResult } from "../../types";
 import {
   clearPersistedStateByPrefix,
   usePersistedState,
@@ -41,7 +44,7 @@ interface StatePhotoSettings {
   winnerBox: WinnerBoxConfig;
 }
 
-export function StatePhotoModal({ stateInfo, candidates, result, photoScale, photoMapScale, onClose, scenarioYear, municipalityScenarioKey }: {
+export function StatePhotoModal({ stateInfo, candidates, result, photoScale, photoMapScale, onClose, scenarioYear, municipalityScenarioKey, electionRound }: {
   stateInfo: StateInfo;
   candidates: Candidate[];
   result?: StateResult;
@@ -50,8 +53,10 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
   onClose: () => void;
   scenarioYear?: number;
   municipalityScenarioKey?: HistoricalMunicipalityScenarioKey;
+  electionRound: ElectionRound;
 }) {
   const captureRef = useRef<HTMLDivElement>(null);
+  const verticalCaptureRef = useRef<HTMLDivElement>(null);
   const defaultSettings = useMemo<StatePhotoSettings>(
     () => ({
       localMapScale: photoMapScale,
@@ -75,6 +80,7 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
     defaultSettings
   );
   const [resetMessage, setResetMessage] = useState("");
+  const [formatDialogOpen, setFormatDialogOpen] = useState(false);
   const {
     localMapScale,
     showMunicipalityPaint,
@@ -130,12 +136,16 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
   const bgStyle = getPhotoBackgroundStyle(bgValue, bgImage);
   const bgFallbackColor = getCaptureFallbackColor(bgValue, bgImage);
   const frameSurfaceColor = getFrameSurfaceColor(bgValue, bgImage);
+  const photoMapSize = Math.round(localMapScale * 1.35);
+  const canUseVertical = electionRound === "segundo" && Boolean(ranked.first && ranked.second);
 
-  const handleDownload = async () => {
-    if (!captureRef.current) return;
+  const handleDownloadFormat = async (format: PhotoExportFormat) => {
+    setFormatDialogOpen(false);
+    const target = format === "9:16" ? verticalCaptureRef.current : captureRef.current;
+    if (!target) return;
     await captureAndDownload(
-      captureRef.current,
-      `foto-estado-${stateInfo.uf}-${Date.now()}.png`,
+      target,
+      `foto-estado-${stateInfo.uf}-${format.replace(":", "x")}-${Date.now()}.png`,
       bgFallbackColor
     );
   };
@@ -276,15 +286,15 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
             {resetMessage && (
               <span className="text-xs font-bold text-emerald-300">{resetMessage}</span>
             )}
-            <button type="button" onClick={handleDownload} className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-black text-zinc-950">Salvar PNG</button>
+            <button type="button" onClick={() => setFormatDialogOpen(true)} className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-black text-zinc-950">Salvar PNG</button>
             <button type="button" onClick={onClose} className="rounded-xl border border-white/15 px-4 py-2 text-sm font-bold text-white">Fechar</button>
           </div>
         </div>
 
         <div
           ref={captureRef}
-          className="rounded-[40px] border border-white/10 p-8"
-          style={bgStyle}
+          className="mx-auto rounded-[40px] border border-white/10 p-8"
+          style={{ ...bgStyle, width: 1920, minHeight: 1080, aspectRatio: "16 / 9" }}
         >
           <div className="mb-6 text-center">
             <div className="text-[11px] font-black uppercase tracking-[0.6em] text-slate-500">
@@ -315,7 +325,7 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
               stateInfo={stateInfo}
               winnerColor={winnerColor}
               winnerPct={winnerPct}
-              mapSizePx={localMapScale}
+              mapSizePx={photoMapSize}
               showMunicipalityPaint={showMunicipalityPaint}
               municipalityPaint={result?.municipalityPaint ?? {}}
               municipalityVotes={result?.municipalities ?? {}}
@@ -363,6 +373,41 @@ export function StatePhotoModal({ stateInfo, candidates, result, photoScale, pho
             </div>
           </div>
         </div>
+        <div className="absolute left-[-12000px] top-0">
+          {ranked.first && ranked.second && (
+            <div ref={verticalCaptureRef}>
+              <VerticalPhotoCard
+                title={`Resultado - 2o Turno ${scenarioYear ?? 2026} - ${stateInfo.uf}`}
+                left={ranked.first}
+                right={ranked.second}
+                bgStyle={bgStyle}
+                map={
+                  <StateMapCenter
+                    stateInfo={stateInfo}
+                    winnerColor={winnerColor}
+                    winnerPct={winnerPct}
+                    mapSizePx={760}
+                    showMunicipalityPaint={showMunicipalityPaint}
+                    municipalityPaint={result?.municipalityPaint ?? {}}
+                    municipalityVotes={result?.municipalities ?? {}}
+                    candidateById={candidateById}
+                    candidates={candidates}
+                    municipalityScenarioKey={municipalityScenarioKey}
+                    shadeMunicipalitiesByPct={shadeByWinMargin}
+                    municipalityMapStyle={municipalityMapStyle}
+                  />
+                }
+              />
+            </div>
+          )}
+        </div>
+        {formatDialogOpen && (
+          <PhotoFormatDialog
+            canUseVertical={canUseVertical}
+            onSelect={handleDownloadFormat}
+            onClose={() => setFormatDialogOpen(false)}
+          />
+        )}
       </div>
     </motion.div>
   );

@@ -9,18 +9,21 @@ import {
   OthersCard,
   TopCandidateCard,
   PhotoBackgroundPicker,
+  PhotoFormatDialog,
   WinnerBoxControls,
   AvatarSizeControls,
   DEFAULT_WINNER_BOX,
+  VerticalPhotoCard,
   captureAndDownload,
   getCaptureFallbackColor,
   getFrameSurfaceColor,
   getPhotoBackgroundStyle,
+  type PhotoExportFormat,
   type PhotoCardShape,
   type WinnerBoxConfig,
 } from "../photo/PhotoCards";
 import { RegionalMapCenter, RegionalMunicipalityMapCenter } from "../photo/MapCenters";
-import type { Candidate, CandidateId, HistoricalMunicipalityScenarioKey, MunicipalityMapStyle, PathData, RegionName, StateResult } from "../../types";
+import type { Candidate, CandidateId, ElectionRound, HistoricalMunicipalityScenarioKey, MunicipalityMapStyle, PathData, RegionName, StateResult } from "../../types";
 import {
   clearPersistedStateByPrefix,
   usePersistedState,
@@ -44,7 +47,7 @@ interface RegionalPhotoSettings {
   winnerBox: WinnerBoxConfig;
 }
 
-export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, stateGeoData, results, photoScale, photoMapScale, candidateById, onClose, scenarioYear, municipalityScenarioKey }: {
+export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, stateGeoData, results, photoScale, photoMapScale, candidateById, onClose, scenarioYear, municipalityScenarioKey, electionRound }: {
   region: RegionName;
   onRegionChange: (region: RegionName) => void;
   candidates: Candidate[];
@@ -57,8 +60,10 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
   onClose: () => void;
   scenarioYear?: number;
   municipalityScenarioKey?: HistoricalMunicipalityScenarioKey;
+  electionRound: ElectionRound;
 }) {
   const captureRef = useRef<HTMLDivElement>(null);
+  const verticalCaptureRef = useRef<HTMLDivElement>(null);
   const defaultSettings = useMemo<RegionalPhotoSettings>(
     () => ({
       localMapScale: photoMapScale,
@@ -82,6 +87,7 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
     defaultSettings
   );
   const [resetMessage, setResetMessage] = useState("");
+  const [formatDialogOpen, setFormatDialogOpen] = useState(false);
   const {
     localMapScale,
     showMunicipalities,
@@ -151,12 +157,16 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
   const bgStyle = getPhotoBackgroundStyle(bgValue, bgImage);
   const bgFallbackColor = getCaptureFallbackColor(bgValue, bgImage);
   const frameSurfaceColor = getFrameSurfaceColor(bgValue, bgImage);
+  const photoMapSize = Math.round(localMapScale * 1.35);
+  const canUseVertical = electionRound === "segundo" && Boolean(ranked.first && ranked.second);
 
-  const handleDownload = async () => {
-    if (!captureRef.current) return;
+  const handleDownloadFormat = async (format: PhotoExportFormat) => {
+    setFormatDialogOpen(false);
+    const target = format === "9:16" ? verticalCaptureRef.current : captureRef.current;
+    if (!target) return;
     await captureAndDownload(
-      captureRef.current,
-      `foto-regional-${region}-${Date.now()}.png`,
+      target,
+      `foto-regional-${region}-${format.replace(":", "x")}-${Date.now()}.png`,
       bgFallbackColor
     );
   };
@@ -310,7 +320,7 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
             {resetMessage && (
               <span className="text-xs font-bold text-emerald-300">{resetMessage}</span>
             )}
-            <button type="button" onClick={handleDownload}
+            <button type="button" onClick={() => setFormatDialogOpen(true)}
               className="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3 text-sm font-black text-white shadow-lg transition-all hover:scale-105">
               Salvar PNG
             </button>
@@ -323,8 +333,8 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
 
         <div
           ref={captureRef}
-          className="rounded-[50px] border border-white/10 p-12 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.7)]"
-          style={bgStyle}
+          className="mx-auto rounded-[50px] border border-white/10 p-12 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.7)]"
+          style={{ ...bgStyle, width: 1920, minHeight: 1080, aspectRatio: "16 / 9" }}
         >
           <div className="mb-6 text-center">
             <div className="text-[11px] font-black uppercase tracking-[0.6em] text-slate-500">
@@ -356,13 +366,13 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
                 region={region}
                 results={results}
                 candidateById={candidateById}
-                mapSizePx={localMapScale}
+                mapSizePx={photoMapSize}
                 municipalityScenarioKey={municipalityScenarioKey}
                 shadeMunicipalitiesByPct={shadeByWinMargin}
                 municipalityMapStyle={municipalityMapStyle}
               />
             ) : (
-              <RegionalMapCenter regionPaths={mapPaths} results={results} candidateById={candidateById} mapSizePx={localMapScale} />
+              <RegionalMapCenter regionPaths={mapPaths} results={results} candidateById={candidateById} mapSizePx={photoMapSize} />
             )}
             {ranked.second && (
               <div className="flex-1 min-w-[220px]">
@@ -402,6 +412,40 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
             </div>
           </div>
         </div>
+        <div className="absolute left-[-12000px] top-0">
+          {ranked.first && ranked.second && (
+            <div ref={verticalCaptureRef}>
+              <VerticalPhotoCard
+                title={`Resultado - 2o Turno ${scenarioYear ?? 2026} - ${region}`}
+                left={ranked.first}
+                right={ranked.second}
+                bgStyle={bgStyle}
+                map={
+                  showMunicipalities ? (
+                    <RegionalMunicipalityMapCenter
+                      region={region}
+                      results={results}
+                      candidateById={candidateById}
+                      mapSizePx={760}
+                      municipalityScenarioKey={municipalityScenarioKey}
+                      shadeMunicipalitiesByPct={shadeByWinMargin}
+                      municipalityMapStyle={municipalityMapStyle}
+                    />
+                  ) : (
+                    <RegionalMapCenter regionPaths={mapPaths} results={results} candidateById={candidateById} mapSizePx={760} />
+                  )
+                }
+              />
+            </div>
+          )}
+        </div>
+        {formatDialogOpen && (
+          <PhotoFormatDialog
+            canUseVertical={canUseVertical}
+            onSelect={handleDownloadFormat}
+            onClose={() => setFormatDialogOpen(false)}
+          />
+        )}
       </div>
     </motion.div>
   );

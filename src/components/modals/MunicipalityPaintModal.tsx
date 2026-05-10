@@ -24,6 +24,24 @@ const HISTORICAL_IMPORT_NUMBERS: Record<"2018" | "2022", string[]> = {
   "2022": ["13", "22"],
 };
 
+function getHistoricalImportNumberForCandidate(
+  candidate: Candidate,
+  keyToImport: HistoricalMunicipalityScenarioKey,
+  fallbackNumber?: string
+): string {
+  const name = candidate.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const party = candidate.party.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (keyToImport === "2018") {
+    if (name.includes("bolsonaro") || party === "pl" || party === "psl") return "17";
+    if (name.includes("lula") || name.includes("haddad") || party === "pt") return "13";
+  }
+  if (keyToImport === "2022") {
+    if (name.includes("bolsonaro") || party === "pl" || party === "psl") return "22";
+    if (name.includes("lula") || name.includes("haddad") || party === "pt") return "13";
+  }
+  return fallbackNumber ?? candidate.number;
+}
+
 export function MunicipalityPaintModal({
   stateInfo,
   candidates,
@@ -99,9 +117,21 @@ export function MunicipalityPaintModal({
     return Object.fromEntries(candidates.map((candidate) => [candidate.id, pct])) as Record<CandidateId, number>;
   };
 
+  const normalizeCandidateVotes = (votes: Record<CandidateId, number>): Record<CandidateId, number> => {
+    const candidateIds = candidates.map((candidate) => candidate.id);
+    const filtered = Object.fromEntries(
+      candidateIds.map((id) => [id, Math.max(0, votes[id] ?? 0)])
+    ) as Record<CandidateId, number>;
+    const total = Object.values(filtered).reduce((sum, value) => sum + value, 0);
+    if (total <= 0) return getEvenVotes();
+    return Object.fromEntries(
+      candidateIds.map((id) => [id, ((filtered[id] ?? 0) / total) * 100])
+    ) as Record<CandidateId, number>;
+  };
+
   const getVotesForPath = (pathItem: MunicipalityPath): Record<CandidateId, number> => {
     const stored = municipalities[pathItem.code];
-    if (stored) return { ...getEvenVotes(), ...stored };
+    if (stored) return normalizeCandidateVotes(stored);
     const paintedId = paint[pathItem.code];
     if (paintedId) {
       return Object.fromEntries(candidates.map((candidate) => [candidate.id, candidate.id === paintedId ? 100 : 0])) as Record<CandidateId, number>;
@@ -112,7 +142,7 @@ export function MunicipalityPaintModal({
       pathItem.name,
       candidates
     );
-    return officialVotes ? { ...getEvenVotes(), ...officialVotes } : getEvenVotes();
+    return officialVotes ? normalizeCandidateVotes(officialVotes) : getEvenVotes();
   };
 
   const getWinnerFromVotes = (votes: Record<CandidateId, number>): CandidateId | null => {
@@ -204,7 +234,9 @@ export function MunicipalityPaintModal({
       const votes = Object.fromEntries(
         candidates.map((candidate, index) => {
           const fallbackNumber = importNumbers[index];
+          const mappedNumber = getHistoricalImportNumberForCandidate(candidate, keyToImport, fallbackNumber);
           const rawVotes =
+            votesByNumber[mappedNumber] ??
             votesByNumber[candidate.number] ??
             (fallbackNumber ? votesByNumber[fallbackNumber] : 0) ??
             0;

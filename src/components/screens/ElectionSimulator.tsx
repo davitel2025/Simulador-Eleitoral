@@ -61,6 +61,19 @@ type MapTooltip = {
   municipalityName?: string;
 };
 type MapContextMenu = { uf: string; x: number; y: number } | null;
+type MunicipalityContextMenu = {
+  uf: string;
+  code: string;
+  name: string;
+  x: number;
+  y: number;
+} | null;
+type MunicipalityEditor = {
+  uf: string;
+  code: string;
+  name: string;
+  votes: Record<CandidateId, number>;
+} | null;
 type MapTheme = "dark" | "light";
 type MunicipalityColorMode = "winner" | "percentage";
 type PinchState = {
@@ -223,6 +236,10 @@ export function ElectionSimulator({
   const [showRegionBorders, setShowRegionBorders] = useState(false);
   const [mapTooltip, setMapTooltip] = useState<MapTooltip | null>(null);
   const [contextMenu, setContextMenu] = useState<MapContextMenu>(null);
+  const [municipalityContextMenu, setMunicipalityContextMenu] =
+    useState<MunicipalityContextMenu>(null);
+  const [municipalityEditor, setMunicipalityEditor] =
+    useState<MunicipalityEditor>(null);
   const [mapViewport, setMapViewport] = useState({ width: 0, height: 0 });
   const [autoMapTransition, setAutoMapTransition] = useState(false);
   const [highlightedState, setHighlightedState] = useState<string | null>(null);
@@ -565,15 +582,18 @@ export function ElectionSimulator({
   }, []);
 
   useEffect(() => {
-    if (!contextMenu) return;
-    const close = () => setContextMenu(null);
+    if (!contextMenu && !municipalityContextMenu) return;
+    const close = () => {
+      setContextMenu(null);
+      setMunicipalityContextMenu(null);
+    };
     window.addEventListener("click", close);
     window.addEventListener("keydown", close);
     return () => {
       window.removeEventListener("click", close);
       window.removeEventListener("keydown", close);
     };
-  }, [contextMenu]);
+  }, [contextMenu, municipalityContextMenu]);
 
   // ── Carrega resultados do cenário histórico ──────────────────────────────
   useEffect(() => {
@@ -704,8 +724,24 @@ export function ElectionSimulator({
           ...result,
           votes: normalizedVotes,
           winner: getWinner(normalizedVotes),
-          municipalityPaint: result.municipalityPaint ?? {},
+          municipalities: Object.fromEntries(
+            Object.entries(result.municipalities ?? {}).map(([code, municipalityVotes]) => [
+              code,
+              normalizeVotesForCandidates(municipalityVotes, candidateIds),
+            ])
+          ),
+          municipalityPaint: Object.fromEntries(
+            Object.entries(result.municipalities ?? {}).flatMap(([code, municipalityVotes]) => {
+              const winner = getWinner(normalizeVotesForCandidates(municipalityVotes, candidateIds));
+              return winner ? [[code, winner]] : [];
+            })
+          ),
         };
+        Object.entries(result.municipalityPaint ?? {}).forEach(([code, winner]) => {
+          if (candidateIds.includes(winner) && !next[uf].municipalityPaint[code]) {
+            next[uf].municipalityPaint[code] = winner;
+          }
+        });
       }
       return next;
     });
@@ -883,6 +919,101 @@ export function ElectionSimulator({
     });
     flashState(uf);
     setStateDialog(null);
+  };
+
+  const getEvenMunicipalityVotes = useCallback((): Record<CandidateId, number> => {
+    const pct = candidates.length > 0 ? 100 / candidates.length : 0;
+    return Object.fromEntries(candidates.map((candidate) => [candidate.id, pct])) as Record<CandidateId, number>;
+  }, [candidates]);
+
+  const getMunicipalityVotesForMenu = useCallback(
+    (uf: string, code: string, name: string): Record<CandidateId, number> => {
+      const candidateIds = candidates.map((candidate) => candidate.id);
+      const stored = results[uf]?.municipalities?.[code];
+      if (stored) return normalizeVotesForCandidates(stored, candidateIds);
+      const official = getHistoricalMunicipalityCandidatePcts(
+        loadedScenario?.municipalityResultStrategy,
+        uf,
+        name,
+        candidates
+      );
+      if (official) return normalizeVotesForCandidates(official, candidateIds);
+      const winnerId = results[uf]?.municipalityPaint?.[code];
+      if (winnerId) {
+        return Object.fromEntries(
+          candidates.map((candidate) => [candidate.id, candidate.id === winnerId ? 100 : 0])
+        ) as Record<CandidateId, number>;
+      }
+      return getEvenMunicipalityVotes();
+    },
+    [candidates, getEvenMunicipalityVotes, loadedScenario?.municipalityResultStrategy, results]
+  );
+
+  const openMunicipalityEditor = useCallback(
+    (menu: NonNullable<MunicipalityContextMenu>) => {
+      setMunicipalityEditor({
+        uf: menu.uf,
+        code: menu.code,
+        name: menu.name,
+        votes: getMunicipalityVotesForMenu(menu.uf, menu.code, menu.name),
+      });
+      setMunicipalityContextMenu(null);
+    },
+    [getMunicipalityVotesForMenu]
+  );
+
+  const updateMunicipalityEditorPct = (candidateId: CandidateId, rawValue: number) => {
+    setMunicipalityEditor((prev) => {
+      if (!prev) return prev;
+      const value = clamp(rawValue, 0, 100);
+      const otherIds = candidates.map((candidate) => candidate.id).filter((id) => id !== candidateId);
+      const otherTotal = otherIds.reduce((sum, id) => sum + (prev.votes[id] ?? 0), 0);
+      const remaining = 100 - value;
+      const nextVotes: Record<CandidateId, number> = { ...prev.votes, [candidateId]: value };
+      otherIds.forEach((id) => {
+        nextVotes[id] = otherTotal > 0
+          ? ((prev.votes[id] ?? 0) / otherTotal) * remaining
+          : remaining / Math.max(1, otherIds.length);
+      });
+      return { ...prev, votes: nextVotes };
+    });
+  };
+
+  const saveMunicipalityEditor = () => {
+    if (!municipalityEditor) return;
+    const candidateIds = candidates.map((candidate) => candidate.id);
+    const votes = normalizeVotesForCandidates(municipalityEditor.votes, candidateIds);
+    const winner = getWinner(votes);
+    setResults((prev) => {
+      const existing = prev[municipalityEditor.uf];
+      const fallbackVotes = normalizeVotesForCandidates({}, candidateIds);
+      const nextState: StateResult = existing ?? {
+        uf: municipalityEditor.uf,
+        votes: fallbackVotes,
+        winner: getWinner(fallbackVotes),
+        municipalities: {},
+        usesMunicipalities: false,
+        municipalityPaint: {},
+      };
+      const nextMunicipalities = {
+        ...(nextState.municipalities ?? {}),
+        [municipalityEditor.code]: votes,
+      };
+      const nextPaint = { ...(nextState.municipalityPaint ?? {}) };
+      if (winner) nextPaint[municipalityEditor.code] = winner;
+      else delete nextPaint[municipalityEditor.code];
+      return {
+        ...prev,
+        [municipalityEditor.uf]: {
+          ...nextState,
+          municipalities: nextMunicipalities,
+          municipalityPaint: nextPaint,
+          usesMunicipalities: Object.keys(nextPaint).length > 0,
+        },
+      };
+    });
+    flashState(municipalityEditor.uf);
+    setMunicipalityEditor(null);
   };
 
   const handleResetState = (uf: string) => {
@@ -1069,6 +1200,25 @@ export function ElectionSimulator({
   const contextPathItem = contextMenu
     ? paths.find((item) => item.uf === contextMenu.uf)
     : undefined;
+  const municipalityContextStateInfo = municipalityContextMenu
+    ? STATE_BY_UF[municipalityContextMenu.uf]
+    : null;
+  const municipalityContextVotes = municipalityContextMenu
+    ? getMunicipalityVotesForMenu(
+        municipalityContextMenu.uf,
+        municipalityContextMenu.code,
+        municipalityContextMenu.name
+      )
+    : undefined;
+  const municipalityContextWinnerId = municipalityContextVotes
+    ? getWinner(municipalityContextVotes)
+    : null;
+  const municipalityContextWinner = municipalityContextWinnerId
+    ? candidateById[municipalityContextWinnerId]
+    : null;
+  const municipalityContextWinnerPct = municipalityContextWinnerId && municipalityContextVotes
+    ? municipalityContextVotes[municipalityContextWinnerId] ?? 0
+    : 0;
   const activeMunicipalityPaths = useMemo(() => {
     const activeUfs = new Set(activeStates.map((state) => state.uf));
     return municipalityPaths.filter((item) => activeUfs.has(item.uf));
@@ -1904,6 +2054,123 @@ export function ElectionSimulator({
               )}
             </AnimatePresence>
 
+            <AnimatePresence>
+              {municipalityContextMenu && municipalityContextStateInfo && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.94 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.94 }}
+                  transition={{ duration: 0.12 }}
+                  className="absolute z-40 w-64 overflow-hidden rounded-xl border border-white/15 bg-slate-950/95 p-1 shadow-2xl backdrop-blur-xl"
+                  style={{
+                    left: Math.min(municipalityContextMenu.x, Math.max(12, mapViewport.width - 268)),
+                    top: Math.min(municipalityContextMenu.y, Math.max(12, mapViewport.height - 220)),
+                  }}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="border-b border-white/10 px-3 py-2">
+                    <div className="text-sm font-black text-white">{municipalityContextMenu.name}</div>
+                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                      {municipalityContextStateInfo.name} - {municipalityContextMenu.uf}
+                    </div>
+                  </div>
+                  <div className="px-3 py-2">
+                    {municipalityContextWinner ? (
+                      <div
+                        className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-black"
+                        style={{ color: municipalityContextWinner.color }}
+                      >
+                        {municipalityContextWinner.name} - {formatPct(municipalityContextWinnerPct)}
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-slate-400">
+                        Sem vencedor definido
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => openMunicipalityEditor(municipalityContextMenu)}
+                      className="mt-2 block w-full rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-200 transition hover:bg-white/10"
+                    >
+                      Alterar porcentagem
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+              {municipalityEditor && (
+                <motion.div
+                  initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                  transition={{ duration: 0.14 }}
+                  className="absolute left-1/2 top-8 z-50 w-[min(520px,calc(100%-32px))] -translate-x-1/2 rounded-2xl border border-white/15 bg-slate-950/95 p-4 text-white shadow-2xl backdrop-blur-xl"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-black">{municipalityEditor.name}</div>
+                      <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                        {STATE_BY_UF[municipalityEditor.uf]?.name} - {municipalityEditor.uf}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setMunicipalityEditor(null)}
+                      className="rounded-lg border border-white/10 px-2 py-1 text-xs font-black text-slate-300 hover:bg-white/10"
+                    >
+                      Fechar
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {candidates.map((candidate) => (
+                      <label key={candidate.id} className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2">
+                        <span className="w-28 truncate text-xs font-black" style={{ color: candidate.color }}>
+                          {candidate.name}
+                        </span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          step={0.1}
+                          value={municipalityEditor.votes[candidate.id] ?? 0}
+                          onChange={(event) => updateMunicipalityEditorPct(candidate.id, Number(event.target.value))}
+                          className="h-2 min-w-0 flex-1 appearance-none rounded-full bg-slate-700 accent-emerald-500"
+                        />
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={0.1}
+                          value={(municipalityEditor.votes[candidate.id] ?? 0).toFixed(1)}
+                          onChange={(event) => updateMunicipalityEditorPct(candidate.id, Number(event.target.value))}
+                          className="w-20 rounded-lg border border-white/10 bg-slate-950 px-2 py-1 text-right text-xs font-bold text-white"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <div className="mt-4 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setMunicipalityEditor(null)}
+                      className="rounded-xl border border-white/10 px-4 py-2 text-xs font-bold text-slate-300 hover:bg-white/10"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={saveMunicipalityEditor}
+                      className="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-black text-zinc-950 hover:bg-emerald-400"
+                    >
+                      Confirmar
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {paths.length === 0 ? (
               <div className="flex h-[70vh] items-center justify-center text-slate-400">
                 <div className="text-center">
@@ -2028,6 +2295,20 @@ export function ElectionSimulator({
                           onMouseLeave={() => {
                             setHoveredState(null);
                             setMapTooltip(null);
+                          }}
+                          onContextMenu={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            const rect = mapContainerRef.current?.getBoundingClientRect();
+                            if (!rect) return;
+                            setContextMenu(null);
+                            setMunicipalityContextMenu({
+                              uf: pathItem.uf,
+                              code: pathItem.code,
+                              name: pathItem.name,
+                              x: event.clientX - rect.left,
+                              y: event.clientY - rect.top,
+                            });
                           }}
                         />
                       );
@@ -2855,6 +3136,7 @@ export function ElectionSimulator({
             onClose={() => setStateDialog(null)}
             scenarioYear={scenarioYear}
             municipalityScenarioKey={loadedScenario?.municipalityResultStrategy}
+            electionRound={round}
           />
         )}
       </AnimatePresence>
@@ -2872,6 +3154,7 @@ export function ElectionSimulator({
             onClose={() => setNationalPhotoOpen(false)}
             scenarioYear={scenarioYear}
             municipalityScenarioKey={loadedScenario?.municipalityResultStrategy}
+            electionRound={round}
           />
         )}
       </AnimatePresence>
@@ -2891,6 +3174,7 @@ export function ElectionSimulator({
             onClose={() => setRegionalPhotoOpen(false)}
             scenarioYear={scenarioYear}
             municipalityScenarioKey={loadedScenario?.municipalityResultStrategy}
+            electionRound={round}
           />
         )}
       </AnimatePresence>
