@@ -223,11 +223,27 @@ export function CandidateManager({
               />
               <input
                 type="text"
+                value={candidate.titular || ""}
+                onChange={(event) => updateCandidate(candidate.id, { titular: event.target.value })}
+                list="candidate-manager-titular-options"
+                className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200"
+                placeholder="Titular"
+              />
+              <input
+                type="text"
                 value={candidate.party}
                 onChange={(event) => updateCandidate(candidate.id, { party: event.target.value })}
                 className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200"
                 placeholder="Partido"
               />
+            </div>
+            <datalist id="candidate-manager-titular-options">
+              {candidates.map((candidateOption) => (
+                <option key={candidateOption.id} value={candidateOption.name} />
+              ))}
+            </datalist>
+
+            <div className="mb-2 grid grid-cols-1 gap-2 md:grid-cols-2">
               <input
                 type="text"
                 value={candidate.ideology || ""}
@@ -253,7 +269,7 @@ export function CandidateManager({
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               <SimpleUpload
                 label="Foto"
                 image={candidate.photo}
@@ -268,6 +284,14 @@ export function CandidateManager({
                 borderColor={candidate.color}
                 onUpload={(vicePhoto) => updateCandidate(candidate.id, { vicePhoto })}
                 onRemove={() => updateCandidate(candidate.id, { vicePhoto: undefined })}
+                rounded="full"
+              />
+              <SimpleUpload
+                label="Foto Titular"
+                image={candidate.titularPhoto}
+                borderColor={candidate.color}
+                onUpload={(titularPhoto) => updateCandidate(candidate.id, { titularPhoto })}
+                onRemove={() => updateCandidate(candidate.id, { titularPhoto: undefined })}
                 rounded="full"
               />
               <SimpleUpload
