@@ -1,157 +1,269 @@
-Você é um assistente de desenvolvimento integrado ao terminal. Você tem acesso direto ao repositório do projeto "Simulador Eleitoral" localizado na pasta atual. O projeto é uma aplicação React + TypeScript + Vite com Tailwind CSS. Os principais arquivos que você precisará modificar estão em:
+Você é um desenvolvedor React/TypeScript experiente. Tenho um projeto chamado Simulador Eleitoral hospedado em:
 
+- GitHub: https://github.com/davitel2025/Simulador-Eleitoral
+- GitHub Pages: https://davitel2025.github.io/Simulador-Eleitoral/
+
+Antes de qualquer coisa, leia TODOS os arquivos do repositório completo para entender a estrutura, os tipos TypeScript existentes, os estados, os componentes e como tudo se conecta. Os arquivos principais são:
+
+- src/App.tsx
+- src/components/CandidateManager.tsx
+- src/components/UserIcon.tsx
 - src/components/modals/MunicipalityPaintModal.tsx
 - src/components/modals/NationalPhotoModal.tsx
 - src/components/modals/RegionalPhotoModal.tsx
+- src/components/modals/StateActionModal.tsx
+- src/components/modals/StateModal.tsx
 - src/components/modals/StatePhotoModal.tsx
+- src/components/photo/MapCenters.tsx
 - src/components/photo/PhotoCards.tsx
-- src/data/historicalElectionResults.ts  (e/ou o script scripts/generate_historical_election_results.py)
+- src/components/screens/CandidateSetupScreen.tsx
+- src/components/screens/ElectionSimScreen.tsx (ou o nome real equivalente)
+- Todos os arquivos de dados históricos de municípios (provavelmente em src/data/ ou similar)
+- Todos os arquivos de tipos TypeScript (interfaces Candidate, CandidateId, ElectionRound, etc.)
+- Todos os hooks e utilitários (usePersistedState, getHistoricalMunicipalityVotes, getHistoricalMunicipalityCandidatePcts, etc.)
 
-Leia CADA UM DESSES ARQUIVOS NA ÍNTEGRA antes de começar qualquer modificação. Após ler, implemente TODAS as alterações descritas abaixo, uma por uma, sem pular nenhuma. Após cada modificação, confirme o que foi feito e qual arquivo foi alterado.
+Agora faça TODAS as modificações descritas abaixo com precisão e sem omitir nada:
 
-═══════════════════════════════════════════════════════════════
-MODIFICAÇÃO 1 — TOOLTIP DE NOME DO MUNICÍPIO AO PASSAR O MOUSE
-(Arquivo: src/components/modals/MunicipalityPaintModal.tsx)
-═══════════════════════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════════
+CORRECAO 1 — Bug: Botão "Alterar" no menu de contexto do município não funciona
+═══════════════════════════════════════════════════════════════════
 
-No componente de pintura de municípios (modo "Alterar Município"), quando o usuário está com esse modal aberto e move o mouse sobre qualquer município no mapa SVG:
+PROBLEMA:
+No componente MunicipalityPaintModal.tsx, quando o usuário clica com o botão DIREITO do mouse em um município no mapa SVG, aparece um menu de contexto (contextMenu state). Esse menu exibe dados do município e tem um botão "Alterar" que deveria: (1) mudar o editMode para "percentage", (2) preencher o searchQuery com o nome do município, (3) fechar o menu. Mas atualmente ao clicar no "Alterar" NADA acontece.
 
-1. Mostre um TOOLTIP flutuante (posicionado próximo ao cursor, ligeiramente acima e à direita) exibindo o nome do município (propriedade "name" ou "NM_MUNICIPIO" do GeoJSON). O tooltip deve ter fundo escuro semitransparente (ex: bg-slate-800/90), texto branco, borda fina (border border-slate-600), border-radius arredondado, padding pequeno, font-size pequena e z-index alto para ficar sempre visível acima do mapa.
+CAUSA RAIZ DO BUG:
+Há um useEffect que faz window.addEventListener("click", closeContextMenu) para fechar o menu quando o usuário clica em qualquer lugar. Quando o usuário clica no botão "Alterar", o evento de clique propaga para o window e o closeContextMenu é chamado, limpando o contextMenu state antes ou junto da execução do handler do botão. Isso anula a ação.
 
-2. Quando o mouse sair de um município (onMouseLeave), o tooltip deve desaparecer.
+COMO CORRIGIR (passo a passo):
+1. No useEffect que registra o listener de fechar o menu, troque "click" por "mousedown" para que o fechamento automático use mousedown ao invés de click. Isso resolve a colisão porque o onClick do botão dispara no mouseup/click, depois do mousedown.
+2. No botão "Alterar" dentro do JSX do contextMenu, o handler deve ser:
+   onClick={(event) => {
+     event.stopPropagation();
+     const nome = contextMenu.name; // salva antes de limpar
+     setEditMode("percentage");
+     setSearchQuery(nome);
+     setContextMenu(null);
+   }}
+3. Certifique-se de que o elemento container do contextMenu que tem onClick={(event) => event.stopPropagation()} está funcionando corretamente para não propagar o clique dentro do menu para o window.
+4. Após a correção, ao clicar em "Alterar": o mapa some, a lista de sliders de porcentagem aparece (editMode === "percentage"), e o campo de busca já está preenchido com o nome do município clicado, mostrando SOMENTE aquele município na lista.
+5. Verifique também que o botão não está com pointer-events desabilitado por algum CSS herdado do container do mapa (o SVG container pode ter onContextMenu que captura eventos).
 
-3. O tooltip deve seguir o cursor do mouse em tempo real (usar evento onMouseMove com clientX/clientY ou pageX/pageY para posicionamento via CSS position:fixed).
+═══════════════════════════════════════════════════════════════════
+CORRECAO 2 — Dados históricos faltando em municípios de 2022 e 2018
+═══════════════════════════════════════════════════════════════════
 
-4. Use um estado React: const [hoveredMunicipality, setHoveredMunicipality] = useState<{name: string; x: number; y: number} | null>(null);
+PROBLEMA:
+Quando se importa dados históricos de 2022 ou 2018, vários municípios ficam sem pintura porque o nome no GeoJSON não bate com o nome nos dados históricos. Municípios confirmados com problema:
+- Mogi Mirim (SP) — grafia "Moji-Mirim" vs "Mogi Mirim"
+- Embu das Artes (SP) — grafia antiga "Embu" nos dados do TSE vs nome atual
+- São Valério (TO) — pode constar como "São Valério da Natividade"
+- Fortaleza do Tabocão (TO) — acentuação diferente ou nome abreviado
+- Conceição do Lago-Açu (MA) — hífen e cedilha podem variar
 
-5. No SVG, em cada <path> de município, adicione:
-   - onMouseEnter (ou onMouseMove) para setar o estado com o nome do município e a posição do mouse
-   - onMouseLeave para limpar o estado (setar null)
+Provavelmente existem dezenas de outros municípios com o mesmo problema no país inteiro.
 
-═══════════════════════════════════════════════════════════════
-MODIFICAÇÃO 2 — MENU DE CONTEXTO (CLIQUE DIREITO) NO MUNICÍPIO
-(Arquivo: src/components/modals/MunicipalityPaintModal.tsx)
-═══════════════════════════════════════════════════════════════
+COMO CORRIGIR:
+1. Localize a função de matching de nomes de municípios (provavelmente getHistoricalMunicipalityVotes ou getHistoricalMunicipalityCandidatePcts em src/data/ ou src/utils/).
+2. Implemente uma função de normalização de string robusta:
+   function normalizeMunicipalityName(name: string): string {
+     return name
+       .normalize('NFD')
+       .replace(/\p{Diacritic}/gu, '')  // remove acentos
+       .toLowerCase()
+       .replace(/-/g, ' ')              // troca hifens por espaço
+       .replace(/[^a-z0-9 ]/g, '')      // remove chars especiais
+       .replace(/\s+/g, ' ')            // normaliza espaços
+       .trim();
+   }
+3. Use esta função nos DOIS lados do matching: tanto no nome que vem do GeoJSON quanto no nome que está nos dados históricos.
+4. Adicione um dicionário de aliases explícitos para os casos conhecidos (e pesquise outros casos no TSE):
+   const MUNICIPALITY_ALIASES: Record = {
+     'moji mirim': 'mogi mirim',
+     'embu': 'embu das artes',
+     'sao valerio da natividade': 'sao valerio',
+     'fortaleza do tabocao': 'fortaleza do tabocao', // confirme nos dados TSE
+     'conceicao do lago acu': 'conceicao do lago acu',
+     // adicione outros conforme encontrar
+   };
+5. A lógica de busca deve ser: (a) tenta match exato normalizado, (b) tenta via alias, (c) fallback sem dados.
+6. Use SOMENTE dados oficiais do TSE (Tribunal Superior Eleitoral). Os dados de resultado por município de 2022 e 2018 estão em: https://dadosabertos.tse.jus.br/ — verifique os nomes exatos dos municípios nos arquivos CSV do TSE para criar os aliases corretos.
+7. Teste nos estados SP (Mogi Mirim, Embu das Artes), TO (São Valério, Fortaleza do Tabocão) e MA (Conceição do Lago-Açu) para validar.
 
-Ainda no componente de pintura de municípios, ao clicar com o BOTÃO DIREITO DO MOUSE sobre um município:
+═══════════════════════════════════════════════════════════════════
+CORRECAO 3 — Layout vertical: ordem dos elementos no card de candidato
+═══════════════════════════════════════════════════════════════════
 
-1. Previna o menu de contexto padrão do navegador (event.preventDefault()).
+PROBLEMA:
+No layout vertical (formato 9:16) da foto gerada, a ordem dos elementos dentro de cada card de candidato está errada. O vice e a ideologia ficam mal posicionados.
 
-2. Abra um pequeno popup/modal de contexto posicionado perto do clique exibindo:
-   - Nome do município em destaque (negrito, maior)
-   - Porcentagem de cada candidato naquele município (com a cor do candidato correspondente, ex: bullet colorido ou badge). Se o município não tiver dados pintados ainda, exiba "Nenhum dado pintado ainda".
-   - Dois botões: "Alterar" (que fecha o popup e permite ao usuário clicar normalmente no município para pintá-lo, ou seja, apenas confirma que o usuário quer mudar) e "Cancelar" (que fecha o popup sem fazer nada).
+ORDEM CORRETA DESEJADA (de cima para baixo dentro de cada card):
+1. Foto do candidato (círculo ou retrato conforme configuração)
+2. Nome do candidato (maior, em destaque)
+3. Nome do vice ("Vice: [nome]") — logo ABAIXO do nome
+4. Ideologia política (ex: "Centro-esquerda") — logo ABAIXO do vice
+5. Porcentagem de votos (ex: "52,3%") — logo ABAIXO da ideologia
+6. Partido, logo do partido, coligação — por último (elementos secundários)
 
-3. Use um estado React separado para este popup: const [contextMenu, setContextMenu] = useState<{name: string; x: number; y: number; municipalityId: string} | null>(null);
+ONDE CORRIGIR:
+No arquivo src/components/photo/PhotoCards.tsx, dentro do componente de card de candidato (PhotoCard ou CandidateCard ou similar). Reordene os elementos JSX no container de texto para seguir exatamente a ordem acima. Ajuste margins/paddings para que fique esteticamente coerente.
 
-4. O popup deve fechar automaticamente se o usuário clicar fora dele (adicione um listener global de click que limpa o estado).
+O MAPA deve permanecer na parte INFERIOR da foto nacional. Não mova o mapa.
 
-5. O popup deve ter z-index muito alto (z-50 ou mais), aparecer com um leve efeito de fade-in (transition-opacity), fundo escuro (bg-slate-900), borda (border border-slate-600), border-radius e sombra (shadow-xl).
+═══════════════════════════════════════════════════════════════════
+FUNCIONALIDADE 4 — Marcadores de estrela em capitais no mapa nacional
+═══════════════════════════════════════════════════════════════════
 
-═══════════════════════════════════════════════════════════════
-MODIFICAÇÃO 3 — MOVER "VOTOS VÁLIDOS" PARA O CANTO SUPERIOR DIREITO NAS FOTOS
-(Arquivos: src/components/modals/NationalPhotoModal.tsx, RegionalPhotoModal.tsx, StatePhotoModal.tsx)
-═══════════════════════════════════════════════════════════════
+ONDE FICA:
+No NationalPhotoModal.tsx, na barra de controles, adicione dois novos botões/toggles.
 
-Atualmente o bloco de "Votos Válidos" (que exibe o total de votos com formatação pt-BR) aparece em alguma posição no layout da foto gerada. Mova-o para o CANTO SUPERIOR DIREITO da área capturável (a div com ref={captureRef} ou ref={verticalCaptureRef}).
+BOTAO A — "Capitais Imp." (Capitais Importantes):
+Ao ativar, exibe um ícone de estrela SVG (★) sobre as coordenadas de 4 capitais no mapa:
+- São Paulo (SP): lng -46.6333, lat -23.5505
+- Rio de Janeiro (RJ): lng -43.1729, lat -22.9068
+- Belo Horizonte (MG): lng -43.9378, lat -19.9208
+- Salvador (BA): lng -38.5014, lat -12.9722
+A cor de cada estrela é a cor do candidato vencedor naquele ESTADO (use os dados de resultado por estado já existentes no projeto).
 
-1. O elemento de Votos Válidos deve ter position: absolute, top: algum valor pequeno (ex: top-3 ou top-4), right: algum valor pequeno (ex: right-3 ou right-4), dentro de um container com position: relative (a área capturável já deve ter isso, caso não tenha, adicione position:relative a ela).
+BOTAO B — "Todas Capitais":
+Ao ativar, exibe estrelas sobre TODAS as 27 capitais:
+- Rio Branco (AC): lng -67.8076, lat -9.9754
+- Maceió (AL): lng -35.7353, lat -9.6658
+- Macapá (AP): lng -51.0669, lat 0.0349
+- Manaus (AM): lng -60.0212, lat -3.1019
+- Salvador (BA): lng -38.5014, lat -12.9722
+- Fortaleza (CE): lng -38.5434, lat -3.7172
+- Brasília (DF): lng -47.9292, lat -15.7801
+- Vitória (ES): lng -40.3378, lat -20.3155
+- Goiânia (GO): lng -49.2539, lat -16.6864
+- São Luís (MA): lng -44.3028, lat -2.5297
+- Cuiabá (MT): lng -56.0974, lat -15.5989
+- Campo Grande (MS): lng -54.6163, lat -20.4697
+- Belo Horizonte (MG): lng -43.9378, lat -19.9208
+- Belém (PA): lng -48.5044, lat -1.4558
+- João Pessoa (PB): lng -34.8631, lat -7.1153
+- Curitiba (PR): lng -49.2731, lat -25.4284
+- Recife (PE): lng -34.8813, lat -8.0539
+- Teresina (PI): lng -42.8016, lat -5.0892
+- Rio de Janeiro (RJ): lng -43.1729, lat -22.9068
+- Natal (RN): lng -35.2094, lat -5.7793
+- Porto Alegre (RS): lng -51.2177, lat -30.0277
+- Porto Velho (RO): lng -63.9004, lat -8.7612
+- Boa Vista (RR): lng -60.6733, lat 2.8235
+- Florianópolis (SC): lng -48.5482, lat -27.5954
+- São Paulo (SP): lng -46.6333, lat -23.5505
+- Aracaju (SE): lng -37.0731, lat -10.9472
+- Palmas (TO): lng -48.3558, lat -10.2491
+A cor de cada estrela é a cor do candidato vencedor no estado correspondente.
 
-2. Faça isso nos TRÊS modais de foto: Nacional (NationalPhotoModal.tsx), Regional (RegionalPhotoModal.tsx) e Estadual (StatePhotoModal.tsx).
+IMPLEMENTACAO TECNICA:
+1. Adicione os estados: const [showImportantCapitals, setShowImportantCapitals] = usePersistedState('showImportantCapitals', false) e const [showAllCapitals, setShowAllCapitals] = usePersistedState('showAllCapitals', false).
+2. No SVG do mapa (já existente no projeto, dentro do captureRef), adicione uma camada de estrelas SOBRE os paths dos estados. As estrelas devem usar a MESMA PROJECAO D3-geo já usada no projeto para converter lng/lat em coordenadas SVG x/y.
+3. Cada estrela é um elemento SVG  com o caractere "★" (U+2605) ou um  SVG com a forma de estrela, colorido com a cor do candidato vencedor daquele estado.
+4. Para descobrir o vencedor por estado, use o mesmo mapeamento de dados de resultado por estado (stateResults, statePcts, candidateById) já disponível no NationalPhotoModal.
+5. Se os dois toggles estiverem ativos ao mesmo tempo, mostre as 27 capitais (Todas Capitais tem precedência).
+6. Use usePersistedState para lembrar a preferência entre sessões.
+7. As estrelas DEVEM aparecer na imagem capturada pelo html2canvas (estão dentro do captureRef/div capturado).
+8. Os botões ficam na barra de controles do NationalPhotoModal, preferencialmente depois dos controles do mapa existentes.
 
-3. O estilo visual deve ser mantido (fundo semitransparente, texto pequeno, sem quebrar o restante do layout).
+═══════════════════════════════════════════════════════════════════
+FUNCIONALIDADE 5 — Campo "Titular" nos candidatos
+═══════════════════════════════════════════════════════════════════
 
-4. Remova o bloco de Votos Válidos de onde estava antes (ex: rodapé ou abaixo do mapa) e coloque apenas no canto superior direito.
+PARTE A — Configuração do Titular (CandidateSetupScreen.tsx e CandidateManager.tsx):
+1. Atualize a interface TypeScript do tipo Candidate (em src/types/ ou onde estiver) adicionando:
+   titular?: string;       // nome do titular
+   titularPhoto?: string;  // foto do titular em base64 (opcional)
+2. Na tela de configuração de candidatos (CandidateSetupScreen.tsx), na aba "candidatos", para cada candidato adicione um novo campo editável:
+   - Um input de texto para o nome do titular (label: "Titular")
+   - Um componente de upload de foto para a foto do titular (igual ao já existente para photo e vicePhoto)
+   - Ambos são OPCIONAIS — sem valor padrão
+3. O campo titular também pode ser preenchido digitando o nome de outro candidato da lista (sugestão: mostrar um datalist com os nomes dos candidatos cadastrados como sugestões).
+4. Se CandidateManager.tsx existir e permitir edição de candidatos durante a simulação, adicione lá também o campo titular.
+5. Propague as atualizações via updateCandidate(candidate.id, { titular: value }) e updateCandidate(candidate.id, { titularPhoto: photo }).
 
-═══════════════════════════════════════════════════════════════
-MODIFICAÇÃO 4 — "COR DO CANDIDATO" MUDA APENAS A PORCENTAGEM
-(Arquivo: src/components/photo/PhotoCards.tsx — componente PhotoCard ou similar)
-═══════════════════════════════════════════════════════════════
+PARTE B — Exibição do Titular nos Cards de Foto (PhotoCards.tsx):
+1. No componente de card de candidato (PhotoCard ou similar) em src/components/photo/PhotoCards.tsx, adicione um elemento no CANTO SUPERIOR ESQUERDO do card com position: absolute, top: 4px, left: 4px, zIndex alto.
+2. O elemento do titular é composto por:
+   - Se candidate.titularPhoto existir: 
+ circular pequeno (32px x 32px, border-radius: 50%, object-fit: cover) com a foto do titular.
+   - Ao lado direito da foto (ou se não houver foto, diretamente): texto "Titular: [candidate.titular]" em fonte pequena (10-11px), cor branca ou cinza claro, com fundo semi-transparente escuro (background: rgba(0,0,0,0.5), border-radius: 4px, padding: 2px 4px) para legibilidade.
+3. Renderize SOMENTE se candidate.titular existir e não for string vazia.
+4. Este elemento usa position: absolute sobre o card. Certifique-se de que o container pai do card tem position: relative.
+5. O elemento DEVE aparecer na imagem capturada pelo html2canvas (está dentro do captureRef).
+6. Aplique em todos os modais de foto que usam PhotoCards: NationalPhotoModal, StatePhotoModal e RegionalPhotoModal.
 
-Existe uma opção/checkbox/toggle chamada "Cor dos candidatos" (ou "useCandidateFontColor") nos modais de foto. Atualmente, quando ativada, ela aplica a cor do candidato em mais de um elemento de texto do card.
+═══════════════════════════════════════════════════════════════════
+CORRECAO 6 — Cor da ideologia condicionada ao toggle "Cor dos candidatos"
+═══════════════════════════════════════════════════════════════════
 
-Altere o comportamento para que, quando "useCandidateFontColor" (ou o nome da prop/state correspondente) estiver ativo:
-- APENAS o texto da PORCENTAGEM do candidato mude de cor para a cor primária do candidato (candidate.color ou candidate.color1).
-- O nome, vice, partido e qualquer outro texto devem continuar usando a cor de fonte padrão (fontColor ou branco).
+PROBLEMA:
+O texto da ideologia (candidate.ideology) está sempre exibido com a cor do candidato ou com algum estilo colorido especial, independente da configuração do usuário. O correto é: a cor da ideologia deve ser a cor neutra (fontColor, geralmente branco) por padrão, e só receber a cor do candidato (candidate.color) quando o toggle "Cor dos candidatos" (useCandidateFontColor) estiver ATIVO.
 
-Encontre no PhotoCard (ou no componente de card individual) onde a cor é aplicada e restrinja a lógica apenas ao elemento que exibe a porcentagem (o que chama formatPct(pct) ou similar).
+ONDE CORRIGIR:
+No arquivo src/components/photo/PhotoCards.tsx, no elemento JSX que renderiza candidate.ideology:
+- Altere o style de cor para:
+  color: useCandidateFontColor ? candidate.color : fontColor
+- Certifique-se de que as props useCandidateFontColor e fontColor estão sendo corretamente passadas do modal pai para o componente PhotoCards.
+- Aplique em NationalPhotoModal, StatePhotoModal e RegionalPhotoModal — nos três.
+- A mudança afeta APENAS a cor do texto de ideologia. Outros textos (nome, vice, porcentagem) continuam com sua lógica atual.
 
-═══════════════════════════════════════════════════════════════
-MODIFICAÇÃO 5 — IDEOLOGIA SEMPRE COM A COR DO CANDIDATO
-(Arquivo: src/components/photo/PhotoCards.tsx)
-═══════════════════════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════════
+CORRECAO 7 — Layout horizontal cortando candidatos menores ao salvar imagem
+═══════════════════════════════════════════════════════════════════
 
-Independentemente do toggle "useCandidateFontColor" estar ativado ou não, o texto de IDEOLOGIA do candidato (candidate.ideology) deve SEMPRE ser renderizado com a cor primária do candidato (candidate.color ou candidate.color1).
+PROBLEMA:
+No formato horizontal (landscape, não 9:16), ao salvar a foto PNG via html2canvas, os candidatos que ficam na linha inferior (ranked.bottom3 — os que não foram para o segundo turno) ficam CORTADOS na imagem final. Parte do card ou o card inteiro não aparece.
 
-Localize no PhotoCard o elemento JSX que exibe candidate.ideology e garanta que seu style sempre tenha color: candidate.color (ou candidate.color1, a cor principal). Isso deve funcionar em todos os formatos de foto (bolinha, retrato, 4:3 etc.) e em todos os três modais (Nacional, Regional, Estadual).
+CAUSA PROVAVEL:
+O div com ref captureRef tem max-height, overflow: hidden ou height fixo que impede o html2canvas de capturar toda a altura do conteúdo. Ou o html2canvas está usando a altura da viewport ao invés da altura real do elemento.
 
-═══════════════════════════════════════════════════════════════
-MODIFICAÇÃO 6 — CORRIGIR MUNICÍPIOS QUE NÃO CARREGAM NOS RESULTADOS HISTÓRICOS DE 2018 E 2022
-(Arquivo: src/data/historicalElectionResults.ts e/ou scripts/generate_historical_election_results.py)
-═══════════════════════════════════════════════════════════════
+COMO CORRIGIR:
+1. No div com ref captureRef em NationalPhotoModal.tsx (e StatePhotoModal.tsx e RegionalPhotoModal.tsx), remova qualquer max-height fixo ou overflow: hidden que esteja limitando a altura. Use height: auto ou apenas min-height se necessário.
+2. Na função savePhotoPng (ou no lugar onde html2canvas é chamado), garanta que:
+   - windowWidth e windowHeight usam o scrollWidth e scrollHeight do elemento, não o clientWidth/clientHeight:
+     const rect = target.getBoundingClientRect();
+     // Use target.scrollHeight para altura real
+   - Passe as opções corretas ao html2canvas:
+     html2canvas(target, {
+       scrollX: 0,
+       scrollY: -window.scrollY,
+       width: target.scrollWidth,
+       height: target.scrollHeight,
+       windowWidth: target.scrollWidth,
+       windowHeight: target.scrollHeight,
+       useCORS: true,
+       ...outrasOpcoesExistentes
+     })
+3. Se os candidatos menores usam position: absolute dentro do captureRef, garanta que o container pai tem height suficiente para acomodá-los (não seja auto com overflow escondendo o absolute).
+4. Adicione padding-bottom no captureRef proporcional a, pelo menos, a altura de um card de candidato menor para evitar cortes.
+5. Teste com 3, 4 e 5 candidatos no primeiro turno para garantir que todos aparecem completos.
+6. Aplique a correção em: NationalPhotoModal, StatePhotoModal e RegionalPhotoModal.
 
-Alguns municípios não estão sendo encontrados/carregados quando o usuário importa o cenário histórico de 2018 ou 2022, por exemplo:
-- Em Rondônia (RO): "Alvorada do Oeste", "Espigão do Oeste" (e possivelmente outros)
-- Em São Paulo (SP): vários municípios não carregam
-- Possivelmente em outros estados também
+═══════════════════════════════════════════════════════════════════
+INSTRUCOES GERAIS PARA IMPLEMENTACAO
+═══════════════════════════════════════════════════════════════════
 
-O problema é de NORMALIZAÇÃO DE NOME: a chave usada no JSON de resultados históricos usa o nome normalizado (sem acento, minúsculas) gerado pelo script Python, mas o nome do município no GeoJSON pode ter diferença de grafia, acento, hífen, espaço ou outra variação.
+1. Leia TODO o código antes de modificar. Entenda os tipos TypeScript, estados React, hooks customizados e fluxo de dados.
 
-Faça o seguinte:
+2. NUNCA quebre funcionalidades existentes. Zoom, arrasto, pintura de municípios, importação JSON, exportação PNG, sliders de porcentagem — tudo deve continuar funcionando.
 
-1. No arquivo historicalElectionResults.ts, verifique a função normalizeHistoricalMunicipalityName e a função getHistoricalMunicipalityVotes. Melhore a normalização para:
-   - Remover acentos (já feito com NFD)
-   - Converter para minúsculas (já feito)
-   - Substituir hífens por espaços e vice-versa (tente os dois)
-   - Remover apóstrofos, pontos e caracteres especiais
-   - Remover espaços duplos
-   - Tratar variações comuns como "d'" → "d ", "''" → "", etc.
+3. Mantenha consistência com o estilo existente: TypeScript strict, React hooks funcionais, Tailwind CSS, Framer Motion onde já usado.
 
-2. Implemente um mecanismo de FALLBACK na função getHistoricalMunicipalityVotes: se não encontrar com a chave exata, tente variações:
-   - Com hífen substituído por espaço
-   - Com espaço substituído por hífen
-   - Removendo "de ", "do ", "da ", "dos ", "das " do início e tentando novamente
-   - Versão com todos os espaços removidos (para casos de erro de digitação)
+4. Ao modificar o tipo Candidate, atualize TODOS os lugares que fazem spread desse tipo ({ ...candidate }) para não gerar erros TypeScript.
 
-3. No script Python generate_historical_election_results.py, na função normalize_name, aplique as mesmas melhorias: remover hífens extras, apóstrofos, pontos e normalizar variações regionais de nomes de municípios (ex: "espigao do oeste" deve bater com "Espigão d'Oeste" e variações).
+5. Use usePersistedState para novos estados de configuração de foto, mantendo consistência com o padrão do projeto.
 
-4. No componente MunicipalityPaintModal.tsx, na hora de importar os dados históricos (função que chama getHistoricalMunicipalityVotes ou equivalente), passe o nome exato do município como aparece no GeoJSON para a função de lookup, garantindo que a normalização aconteça no lado do lookup e não dependa de que o nome no GeoJSON seja idêntico ao do CSV do TSE.
+6. Após todas as modificações, rode: npm run build — corrija todos os erros TypeScript antes de finalizar.
 
-5. Em caso de EMPATE (dois ou mais candidatos com exatamente o mesmo número de votos em um município), em vez de pintar o município com a cor de um deles aleatoriamente ou deixar sem cor, exiba/pinte de forma especial (ex: cor cinza ou listrada) e, se houver algum elemento de tooltip ou info no município, indique "Empate" claramente.
+7. Prioridade de execução sugerida:
+   1) Correcao 1 — bug botão Alterar (crítico, simples)
+   2) Correcao 6 — cor ideologia (simples, rápido)
+   3) Correcao 3 — reordenação layout vertical (visual, médio)
+   4) Correcao 7 — layout horizontal cortando (captura, médio)
+   5) Correcao 2 — dados históricos municípios (trabalhoso, importante)
+   6) Funcionalidade 4 — estrelas capitais (nova feature, médio)
+   7) Funcionalidade 5 — titular (nova feature, mais complexa)
 
-═══════════════════════════════════════════════════════════════
-MODIFICAÇÃO 7 — NOVO LAYOUT DO CARD NO FORMATO 4:3 (LANDSCAPE)
-(Arquivo: src/components/photo/PhotoCards.tsx — e possivelmente NationalPhotoModal.tsx, RegionalPhotoModal.tsx, StatePhotoModal.tsx)
-═══════════════════════════════════════════════════════════════
+8. Faça commits separados por correção/funcionalidade com mensagens em português.
 
-No formato de foto 4:3 (landscape/horizontal), o layout do card de cada candidato deve ser reorganizado da seguinte forma:
-
-LAYOUT ATUAL (provavelmente): foto/avatar | nome | partido | ideologia | porcentagem | (mapa embaixo)
-
-NOVO LAYOUT OBRIGATÓRIO para o formato 4:3:
-- Linha 1: Nome do candidato (negrito, destaque)
-- Linha 2: Nome do vice (imediatamente abaixo do nome do candidato, texto menor, ex: "Vice: [nome do vice]")
-- Linha 3: Ideologia (imediatamente abaixo do vice, com a cor do candidato — conforme Modificação 5)
-- Linha 4: Porcentagem (imediatamente abaixo da ideologia, com a cor do candidato se useCandidateFontColor ativo — conforme Modificação 4)
-- O MAPA deve ficar embaixo de tudo isso, como já está.
-- A foto/avatar do candidato deve continuar aparecendo (na posição que já estava, provavelmente à esquerda ou acima do bloco de texto).
-
-Implemente isso detectando quando o formato ativo é "4:3" (ou o nome interno correspondente, ex: shape === "landscape" ou format === "4:3") e renderizando o JSX do card com a ordem de elementos especificada acima.
-
-Certifique-se de que:
-- O vice só apareça se candidate.vice não for vazio/nulo
-- A ideologia só apareça se candidate.ideology não for vazio/nulo
-- A porcentagem sempre apareça
-- O mapa continue na parte inferior da foto, exatamente como estava
-
-═══════════════════════════════════════════════════════════════
-INSTRUÇÕES GERAIS DE IMPLEMENTAÇÃO
-═══════════════════════════════════════════════════════════════
-
-- Leia TODOS os arquivos mencionados ANTES de começar.
-- Não quebre nenhuma funcionalidade existente.
-- Mantenha o padrão de código TypeScript/React já usado no projeto (sem any desnecessário, use os tipos já definidos em src/types.ts ou onde estiverem).
-- Após cada modificação, execute "npm run build" para verificar se não há erros de compilação. Se houver erro, corrija antes de passar para a próxima modificação.
-- Ao final de todas as modificações, execute "npm run build" uma última vez e confirme que o build foi bem-sucedido.
-- Não altere arquivos de configuração (vite.config.ts, tailwind.config.ts, package.json) a menos que seja estritamente necessário.
-- Faça commit das alterações ao final com uma mensagem descritiva resumindo tudo que foi feito.
+9. Após build bem-sucedido, rode o script de deploy (verificar package.json) para atualizar o GitHub Pages. 
