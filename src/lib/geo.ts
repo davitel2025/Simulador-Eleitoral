@@ -9,6 +9,15 @@ import type {
 import { UF_NAME_MAP, VIEWBOX_HEIGHT, VIEWBOX_WIDTH } from "./constants";
 import { normalizeName } from "./utils";
 
+function getFeatureName(properties: Record<string, unknown>): string {
+  const nameKeys = ["name", "nome", "NOME", "NM_MUNICIP", "NM_MUNICIPIO", "NM_MUN", "nm_mun"];
+  for (const key of nameKeys) {
+    const value = properties[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return "Municipio";
+}
+
 export function resolveUf(properties: Record<string, unknown>): string {
   const directKeys = ["sigla", "UF_05", "abbrev", "SIGLA", "uf"];
   for (const key of directKeys) {
@@ -72,7 +81,7 @@ export function buildMunicipalityPaths(geoData: any): MunicipalityPath[] {
     .map((feature: any) => {
       const props = feature.properties ?? {};
       const code = String(props.id ?? props.codigo ?? props.codarea ?? props.CD_MUN ?? props.geocodigo ?? "");
-      const name = String(props.name ?? props.nome ?? props.NM_MUNICIP ?? "Municipio");
+      const name = getFeatureName(props);
       const d = generator(feature) ?? "";
       return { code, name, d };
     })
@@ -89,7 +98,7 @@ export function buildRegionalMunicipalityPaths(featuresWithUf: any[]): RegionalM
     .map((feature: any) => {
       const props = feature.properties ?? {};
       const code = String(props.id ?? props.codigo ?? props.codarea ?? props.CD_MUN ?? props.geocodigo ?? "");
-      const name = String(props.name ?? props.nome ?? props.NM_MUNICIP ?? "Municipio");
+      const name = getFeatureName(props);
       const uf = String(props._uf ?? "");
       const d = generator(feature) ?? "";
       return { code, name, d, uf };

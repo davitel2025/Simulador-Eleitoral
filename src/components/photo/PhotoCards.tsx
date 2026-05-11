@@ -635,21 +635,28 @@ function VerticalCandidatePanel({
   return (
     <div className="relative flex min-w-0 flex-1 flex-col items-center">
       <TitularBadge candidate={candidate} />
-      <div
-        className="mb-5 h-[420px] w-[310px] overflow-hidden rounded-[30px] border-[6px] bg-slate-950 shadow-[0_28px_70px_-34px_rgba(0,0,0,0.9)]"
-        style={{ borderColor: candidate.color }}
-      >
-        {candidate.photo ? (
-          <SafeImage
-            src={candidate.photo}
-            alt={candidate.name}
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-7xl font-black" style={{ color: candidate.color }}>
-            {getCandidateInitials(candidate)}
+      <div className="relative mb-5 pt-7">
+        {candidate.partyLogo && (
+          <div className="absolute left-1/2 top-0 z-30 flex h-14 max-w-[150px] -translate-x-1/2 items-center justify-center rounded-xl bg-white px-3 py-2 shadow-2xl">
+            <SafeImage src={candidate.partyLogo} alt={candidate.party} className="max-h-full max-w-full object-contain" />
           </div>
         )}
+        <div
+          className="h-[420px] w-[310px] overflow-hidden rounded-[30px] border-[6px] bg-slate-950 shadow-[0_28px_70px_-34px_rgba(0,0,0,0.9)]"
+          style={{ borderColor: candidate.color }}
+        >
+          {candidate.photo ? (
+            <SafeImage
+              src={candidate.photo}
+              alt={candidate.name}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-7xl font-black" style={{ color: candidate.color }}>
+              {getCandidateInitials(candidate)}
+            </div>
+          )}
+        </div>
       </div>
       <div className="max-w-[360px] text-center text-[34px] font-black leading-tight" style={{ color: textColor }}>
         {candidate.name}
@@ -668,15 +675,9 @@ function VerticalCandidatePanel({
         {formatPct(item.pct)}
       </div>
       <div className="mt-4 flex max-w-[390px] flex-wrap justify-center gap-2">
-        {candidate.partyLogo ? (
-          <div className="flex h-10 max-w-[120px] items-center justify-center rounded-lg bg-white px-2 py-1">
-            <SafeImage src={candidate.partyLogo} alt={candidate.party} className="max-h-full max-w-full object-contain" />
-          </div>
-        ) : (
-          <div className="rounded-full border border-white/10 bg-slate-900/80 px-3 py-2 text-center text-[15px] font-bold leading-tight" style={{ color: textColor }}>
-            {candidate.party}
-          </div>
-        )}
+        <div className="rounded-full border border-white/10 bg-slate-900/80 px-3 py-2 text-center text-[15px] font-bold leading-tight" style={{ color: textColor }}>
+          {candidate.party}
+        </div>
         {candidate.coalition && (
           <div className="max-w-[220px] rounded-full border border-white/10 bg-slate-900/80 px-3 py-2 text-center text-[15px] font-bold leading-tight" style={{ color: textColor }}>
             {candidate.coalition}

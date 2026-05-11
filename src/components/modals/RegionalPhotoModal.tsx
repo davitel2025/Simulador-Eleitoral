@@ -1,5 +1,10 @@
 import { useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import { ALL_CAPITALS } from "../../data/capitals";
+import {
+  getHistoricalMunicipalityCandidatePcts,
+  getHistoricalWinnerCandidateId,
+} from "../../data/historicalElectionResults";
 import { REGIONS, STATES, STATE_BY_UF } from "../../data/states";
 import { buildRegionPaths } from "../../lib/geo";
 import { getWinner } from "../../lib/utils";
@@ -23,6 +28,7 @@ import {
   type WinnerBoxConfig,
 } from "../photo/PhotoCards";
 import { RegionalMapCenter, RegionalMunicipalityMapCenter } from "../photo/MapCenters";
+import type { CapitalMarker } from "../photo/MapCenters";
 import type { Candidate, CandidateId, ElectionRound, HistoricalMunicipalityScenarioKey, MunicipalityMapStyle, PathData, RegionName, StateResult } from "../../types";
 import {
   clearPersistedStateByPrefix,
@@ -88,6 +94,7 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
   );
   const [resetMessage, setResetMessage] = useState("");
   const [formatDialogOpen, setFormatDialogOpen] = useState(false);
+  const [showAllCapitals, setShowAllCapitals] = usePersistedState("regionalShowAllCapitals", false);
   const {
     localMapScale,
     showMunicipalities,
@@ -159,6 +166,23 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
   const frameSurfaceColor = getFrameSurfaceColor(bgValue, bgImage);
   const photoMapSize = Math.round(localMapScale * 1.35);
   const canUseVertical = electionRound === "segundo" && Boolean(ranked.first && ranked.second);
+  const capitalMarkers = useMemo<CapitalMarker[]>(() => {
+    if (!showAllCapitals) return [];
+    return ALL_CAPITALS
+      .filter((capital) => STATE_BY_UF[capital.uf]?.region === region)
+      .map((capital) => {
+        const officialVotes = getHistoricalMunicipalityCandidatePcts(
+          municipalityScenarioKey,
+          capital.uf,
+          capital.name,
+          Object.values(candidateById)
+        );
+        const officialWinner = getHistoricalWinnerCandidateId(officialVotes);
+        const winnerId = officialWinner ?? results[capital.uf]?.winner;
+        const winner = winnerId ? candidateById[winnerId] : null;
+        return { ...capital, color: winner?.color ?? "#f8fafc" };
+      });
+  }, [candidateById, municipalityScenarioKey, region, results, showAllCapitals]);
 
   const handleDownloadFormat = async (format: PhotoExportFormat) => {
     setFormatDialogOpen(false);
@@ -278,6 +302,15 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
               value={localMapScale}
               onChange={(localMapScale) => updateSettings({ localMapScale })}
             />
+            <button
+              type="button"
+              onClick={() => setShowAllCapitals((previous) => !previous)}
+              className={`rounded-xl border px-3 py-2 text-xs font-black transition-all ${
+                showAllCapitals ? "border-yellow-300/60 bg-yellow-400/20 text-yellow-100" : "border-white/10 bg-slate-900/80 text-slate-300"
+              }`}
+            >
+              Todas Capitais
+            </button>
             <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2">
               <span className="text-xs font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Fonte</span>
               <input
@@ -375,9 +408,18 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
                 municipalityScenarioKey={municipalityScenarioKey}
                 shadeMunicipalitiesByPct={shadeByWinMargin}
                 municipalityMapStyle={municipalityMapStyle}
+                capitalMarkers={capitalMarkers}
               />
             ) : (
-              <RegionalMapCenter regionPaths={mapPaths} results={results} candidateById={candidateById} mapSizePx={photoMapSize} />
+              <RegionalMapCenter
+                regionPaths={mapPaths}
+                results={results}
+                candidateById={candidateById}
+                mapSizePx={photoMapSize}
+                stateGeoData={stateGeoData}
+                region={region}
+                capitalMarkers={capitalMarkers}
+              />
             )}
             {ranked.second && (
               <div className="flex-1 min-w-[220px]">
@@ -432,9 +474,18 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
                       municipalityScenarioKey={municipalityScenarioKey}
                       shadeMunicipalitiesByPct={shadeByWinMargin}
                       municipalityMapStyle={municipalityMapStyle}
+                      capitalMarkers={capitalMarkers}
                     />
                   ) : (
-                    <RegionalMapCenter regionPaths={mapPaths} results={results} candidateById={candidateById} mapSizePx={760} />
+                    <RegionalMapCenter
+                      regionPaths={mapPaths}
+                      results={results}
+                      candidateById={candidateById}
+                      mapSizePx={760}
+                      stateGeoData={stateGeoData}
+                      region={region}
+                      capitalMarkers={capitalMarkers}
+                    />
                   )
                 }
               />

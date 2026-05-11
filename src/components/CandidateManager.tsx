@@ -251,6 +251,13 @@ export function CandidateManager({
                 className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200"
                 placeholder="Ideologia"
               />
+              <input
+                type="text"
+                value={candidate.coalition || ""}
+                onChange={(event) => updateCandidate(candidate.id, { coalition: event.target.value })}
+                className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200"
+                placeholder="Coligacao"
+              />
             </div>
 
             <div className="mb-3 grid grid-cols-2 gap-2">

@@ -410,6 +410,18 @@ export function CandidateSetupScreen({
                     <CandidateField label="Partido" value={candidate.party} onChange={(value) => updateCandidate(candidate.id, { party: value })} placeholder="Partido" />
                     <CandidateField label="Numero" value={candidate.number} onChange={(value) => updateCandidate(candidate.id, { number: value })} placeholder="Numero" />
                   </div>
+                  <label className="mb-4 block">
+                    <span className="mb-1.5 block text-[10px] font-black uppercase tracking-wider text-slate-500">
+                      Coligacao
+                    </span>
+                    <textarea
+                      value={candidate.coalition || ""}
+                      onChange={(event) => updateCandidate(candidate.id, { coalition: event.target.value })}
+                      placeholder="Ex: PT, MDB, PSDB, PDT..."
+                      rows={2}
+                      className="w-full resize-none rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 transition-all focus:border-white/30 focus:outline-none focus:ring-2 focus:ring-white/10"
+                    />
+                  </label>
 
                   <div className="grid gap-3 md:grid-cols-[140px_1fr_1fr_1fr_1fr]">
                     <label>

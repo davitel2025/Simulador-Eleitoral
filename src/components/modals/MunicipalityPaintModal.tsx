@@ -635,6 +635,7 @@ export function MunicipalityPaintModal({
             <div
               className="fixed z-[90] w-72 rounded-2xl border border-slate-600 bg-slate-900 p-4 text-white opacity-100 shadow-xl transition-opacity"
               style={{ left: contextMenu.x + 10, top: contextMenu.y + 10 }}
+              onMouseDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
             >
               <div className="mb-3 text-base font-black">{contextMenu.name}</div>

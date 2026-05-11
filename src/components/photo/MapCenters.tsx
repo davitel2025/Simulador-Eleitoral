@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { geoMercator } from "d3-geo";
-import { STATES } from "../../data/states";
+import { STATES, STATE_BY_UF } from "../../data/states";
 import {
   getHistoricalMunicipalityCandidatePcts,
   getHistoricalWinnerCandidateId,
@@ -11,6 +11,7 @@ import {
   buildMunicipalityPaths,
   buildRegionalMunicipalityPaths,
   fetchMunicipalityGeo,
+  resolveUf,
 } from "../../lib/geo";
 import type {
   Candidate,
@@ -47,6 +48,40 @@ function MunicipalBroadcastDefs() {
         <feBlend in="SourceGraphic" in2="glow" mode="screen" />
       </filter>
     </defs>
+  );
+}
+
+function CapitalMarkersLayer({
+  projection,
+  capitalMarkers,
+}: {
+  projection: ReturnType<typeof geoMercator> | null;
+  capitalMarkers: CapitalMarker[];
+}) {
+  if (!projection || capitalMarkers.length === 0) return null;
+  return (
+    <g aria-label="Capitais destacadas">
+      {capitalMarkers.map((capital) => {
+        const point = projection([capital.lng, capital.lat]);
+        if (!point) return null;
+        return (
+          <text
+            key={`${capital.uf}-${capital.name}`}
+            x={point[0]}
+            y={point[1]}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fill={capital.color}
+            stroke="#020617"
+            strokeWidth={2.2}
+            paintOrder="stroke"
+            style={{ fontSize: 34, fontWeight: 900, filter: "drop-shadow(0 2px 5px rgba(0,0,0,0.65))" }}
+          >
+            ★
+          </text>
+        );
+      })}
+    </g>
   );
 }
 
@@ -199,43 +234,49 @@ export function NationalMapCenter({
             <path key={pathItem.uf} d={pathItem.d} fill={fill} stroke="#1e293b" strokeWidth={1.5} />
           );
         })}
-        {capitalProjection && capitalMarkers.length > 0 && (
-          <g aria-label="Capitais destacadas">
-            {capitalMarkers.map((capital) => {
-              const point = capitalProjection([capital.lng, capital.lat]);
-              if (!point) return null;
-              return (
-                <text
-                  key={`${capital.uf}-${capital.name}`}
-                  x={point[0]}
-                  y={point[1]}
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                  fill={capital.color}
-                  stroke="#020617"
-                  strokeWidth={2.2}
-                  paintOrder="stroke"
-                  style={{ fontSize: 34, fontWeight: 900, filter: "drop-shadow(0 2px 5px rgba(0,0,0,0.65))" }}
-                >
-                  ★
-                </text>
-              );
-            })}
-          </g>
-        )}
+        <CapitalMarkersLayer projection={capitalProjection} capitalMarkers={capitalMarkers} />
       </svg>
     </div>
   );
 }
 
 export function RegionalMapCenter({
-  regionPaths, results, candidateById, mapSizePx,
+  regionPaths,
+  results,
+  candidateById,
+  mapSizePx,
+  stateGeoData,
+  region,
+  capitalMarkers = [],
 }: {
   regionPaths: PathData[];
   results: Record<string, StateResult>;
   candidateById: Record<number, Candidate>;
   mapSizePx: number;
+  stateGeoData?: any;
+  region?: RegionName;
+  capitalMarkers?: CapitalMarker[];
 }) {
+  const capitalProjection = useMemo(() => {
+    if (capitalMarkers.length === 0) return null;
+    const projection = geoMercator();
+    if (stateGeoData?.features?.length && region) {
+      const regionFeatures = stateGeoData.features.filter((feature: any) => {
+        const uf = resolveUf(feature.properties ?? {});
+        return STATE_BY_UF[uf]?.region === region;
+      });
+      if (regionFeatures.length > 0) {
+        projection.fitExtent(
+          [[20, 20], [VIEWBOX_WIDTH - 20, VIEWBOX_HEIGHT - 20]],
+          { type: "FeatureCollection", features: regionFeatures } as any
+        );
+        return projection;
+      }
+    }
+    projection.center([-54, -15]).scale(680).translate([VIEWBOX_WIDTH / 2, VIEWBOX_HEIGHT / 2]);
+    return projection;
+  }, [capitalMarkers.length, region, stateGeoData]);
+
   return (
     <div className="flex flex-col items-center justify-center px-4 py-2 flex-shrink-0" style={{ width: mapSizePx }}>
       <svg
@@ -254,6 +295,7 @@ export function RegionalMapCenter({
             <path key={pathItem.uf} d={pathItem.d} fill={fill} stroke="#1e293b" strokeWidth={1.5} />
           );
         })}
+        <CapitalMarkersLayer projection={capitalProjection} capitalMarkers={capitalMarkers} />
       </svg>
     </div>
   );
@@ -267,6 +309,7 @@ export function RegionalMunicipalityMapCenter({
   municipalityScenarioKey,
   shadeMunicipalitiesByPct = true,
   municipalityMapStyle = "original",
+  capitalMarkers = [],
 }: {
   region: RegionName;
   results: Record<string, StateResult>;
@@ -275,14 +318,17 @@ export function RegionalMunicipalityMapCenter({
   municipalityScenarioKey?: HistoricalMunicipalityScenarioKey;
   shadeMunicipalitiesByPct?: boolean;
   municipalityMapStyle?: MunicipalityMapStyle;
+  capitalMarkers?: CapitalMarker[];
 }) {
   const [paths, setPaths] = useState<RegionalMunicipalityPath[]>([]);
+  const [geoData, setGeoData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     setPaths([]);
+    setGeoData(null);
     const run = async () => {
       const statesInRegion = STATES.filter((state) => state.region === region);
       const collected: any[] = [];
@@ -298,6 +344,7 @@ export function RegionalMunicipalityMapCenter({
       }));
       if (!active) return;
       setPaths(buildRegionalMunicipalityPaths(collected));
+      setGeoData({ type: "FeatureCollection", features: collected });
       setLoading(false);
     };
     run().catch(() => { if (active) setLoading(false); });
@@ -305,6 +352,16 @@ export function RegionalMunicipalityMapCenter({
   }, [region]);
 
   const svgH = Math.round(mapSizePx * (VIEWBOX_HEIGHT / VIEWBOX_WIDTH));
+  const capitalProjection = useMemo(() => {
+    if (capitalMarkers.length === 0) return null;
+    const projection = geoMercator();
+    if (geoData?.features?.length) {
+      projection.fitExtent([[16, 16], [VIEWBOX_WIDTH - 16, VIEWBOX_HEIGHT - 16]], geoData as any);
+    } else {
+      projection.center([-54, -15]).scale(680).translate([VIEWBOX_WIDTH / 2, VIEWBOX_HEIGHT / 2]);
+    }
+    return projection;
+  }, [capitalMarkers.length, geoData]);
 
   if (loading) {
     return (
@@ -373,6 +430,7 @@ export function RegionalMunicipalityMapCenter({
             />
           );
         })}
+        <CapitalMarkersLayer projection={capitalProjection} capitalMarkers={capitalMarkers} />
       </svg>
     </div>
   );

@@ -1,5 +1,10 @@
 import { useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import { ALL_CAPITALS, DEFAULT_IMPORTANT_CAPITAL_UFS } from "../../data/capitals";
+import {
+  getHistoricalMunicipalityCandidatePcts,
+  getHistoricalWinnerCandidateId,
+} from "../../data/historicalElectionResults";
 import {
   BottomCandidateCard,
   MapSizeSlider,
@@ -29,37 +34,6 @@ import {
 
 const NATIONAL_PHOTO_PREFIX = "eleitoral_nfoto_";
 
-const ALL_CAPITALS: Array<Omit<CapitalMarker, "color">> = [
-  { uf: "AC", name: "Rio Branco", lng: -67.8076, lat: -9.9754 },
-  { uf: "AL", name: "Maceió", lng: -35.7353, lat: -9.6658 },
-  { uf: "AP", name: "Macapá", lng: -51.0669, lat: 0.0349 },
-  { uf: "AM", name: "Manaus", lng: -60.0212, lat: -3.1019 },
-  { uf: "BA", name: "Salvador", lng: -38.5014, lat: -12.9722 },
-  { uf: "CE", name: "Fortaleza", lng: -38.5434, lat: -3.7172 },
-  { uf: "DF", name: "Brasília", lng: -47.9292, lat: -15.7801 },
-  { uf: "ES", name: "Vitória", lng: -40.3378, lat: -20.3155 },
-  { uf: "GO", name: "Goiânia", lng: -49.2539, lat: -16.6864 },
-  { uf: "MA", name: "São Luís", lng: -44.3028, lat: -2.5297 },
-  { uf: "MT", name: "Cuiabá", lng: -56.0974, lat: -15.5989 },
-  { uf: "MS", name: "Campo Grande", lng: -54.6163, lat: -20.4697 },
-  { uf: "MG", name: "Belo Horizonte", lng: -43.9378, lat: -19.9208 },
-  { uf: "PA", name: "Belém", lng: -48.5044, lat: -1.4558 },
-  { uf: "PB", name: "João Pessoa", lng: -34.8631, lat: -7.1153 },
-  { uf: "PR", name: "Curitiba", lng: -49.2731, lat: -25.4284 },
-  { uf: "PE", name: "Recife", lng: -34.8813, lat: -8.0539 },
-  { uf: "PI", name: "Teresina", lng: -42.8016, lat: -5.0892 },
-  { uf: "RJ", name: "Rio de Janeiro", lng: -43.1729, lat: -22.9068 },
-  { uf: "RN", name: "Natal", lng: -35.2094, lat: -5.7793 },
-  { uf: "RS", name: "Porto Alegre", lng: -51.2177, lat: -30.0277 },
-  { uf: "RO", name: "Porto Velho", lng: -63.9004, lat: -8.7612 },
-  { uf: "RR", name: "Boa Vista", lng: -60.6733, lat: 2.8235 },
-  { uf: "SC", name: "Florianópolis", lng: -48.5482, lat: -27.5954 },
-  { uf: "SP", name: "São Paulo", lng: -46.6333, lat: -23.5505 },
-  { uf: "SE", name: "Aracaju", lng: -37.0731, lat: -10.9472 },
-  { uf: "TO", name: "Palmas", lng: -48.3558, lat: -10.2491 },
-];
-
-const IMPORTANT_CAPITAL_UFS = new Set(["SP", "RJ", "MG", "BA"]);
 
 interface NationalPhotoSettings {
   localMapScale: number;
@@ -185,6 +159,11 @@ export function NationalPhotoModal({
   const [formatDialogOpen, setFormatDialogOpen] = useState(false);
   const [showImportantCapitals, setShowImportantCapitals] = usePersistedState("showImportantCapitals", false);
   const [showAllCapitals, setShowAllCapitals] = usePersistedState("showAllCapitals", false);
+  const [capitalPickerOpen, setCapitalPickerOpen] = useState(false);
+  const [importantCapitalUfs, setImportantCapitalUfs] = usePersistedState<string[]>(
+    "importantCapitalUfs",
+    DEFAULT_IMPORTANT_CAPITAL_UFS
+  );
   const {
     localMapScale,
     bgValue,
@@ -252,17 +231,32 @@ export function NationalPhotoModal({
   const photoMapSize = Math.round(localMapScale * 1.35);
   const canUseVertical = electionRound === "segundo" && Boolean(ranked.first && ranked.second);
   const capitalMarkers = useMemo<CapitalMarker[]>(() => {
+    const importantSet = new Set(importantCapitalUfs);
     const source = showAllCapitals
       ? ALL_CAPITALS
       : showImportantCapitals
-        ? ALL_CAPITALS.filter((capital) => IMPORTANT_CAPITAL_UFS.has(capital.uf))
+        ? ALL_CAPITALS.filter((capital) => importantSet.has(capital.uf))
         : [];
     return source.map((capital) => {
-      const winnerId = results[capital.uf]?.winner;
+      const officialVotes = getHistoricalMunicipalityCandidatePcts(
+        municipalityScenarioKey,
+        capital.uf,
+        capital.name,
+        Object.values(candidateById)
+      );
+      const officialWinner = getHistoricalWinnerCandidateId(officialVotes);
+      const winnerId = officialWinner ?? results[capital.uf]?.winner;
       const winner = winnerId ? candidateById[winnerId] : null;
       return { ...capital, color: winner?.color ?? "#f8fafc" };
     });
-  }, [candidateById, results, showAllCapitals, showImportantCapitals]);
+  }, [
+    candidateById,
+    importantCapitalUfs,
+    municipalityScenarioKey,
+    results,
+    showAllCapitals,
+    showImportantCapitals,
+  ]);
 
   // ── Download ────────────────────────────────────────────────────────────
   const handleDownloadFormat = async (format: PhotoExportFormat) => {
@@ -362,7 +356,11 @@ export function NationalPhotoModal({
             />
             <button
               type="button"
-              onClick={() => setShowImportantCapitals((previous) => !previous)}
+              onClick={() => {
+                setShowImportantCapitals(true);
+                setShowAllCapitals(false);
+                setCapitalPickerOpen(true);
+              }}
               className={`rounded-xl border px-3 py-2 text-xs font-black transition-all ${
                 showImportantCapitals ? "border-yellow-300/60 bg-yellow-400/20 text-yellow-100" : "border-white/10 bg-slate-900/80 text-slate-300"
               }`}
@@ -371,7 +369,10 @@ export function NationalPhotoModal({
             </button>
             <button
               type="button"
-              onClick={() => setShowAllCapitals((previous) => !previous)}
+              onClick={() => {
+                setShowAllCapitals((previous) => !previous);
+                setShowImportantCapitals(false);
+              }}
               className={`rounded-xl border px-3 py-2 text-xs font-black transition-all ${
                 showAllCapitals ? "border-yellow-300/60 bg-yellow-400/20 text-yellow-100" : "border-white/10 bg-slate-900/80 text-slate-300"
               }`}
@@ -640,6 +641,54 @@ export function NationalPhotoModal({
             onSelect={handleDownloadFormat}
             onClose={() => setFormatDialogOpen(false)}
           />
+        )}
+        {capitalPickerOpen && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => setCapitalPickerOpen(false)}>
+            <div
+              className="w-full max-w-3xl rounded-2xl border border-white/10 bg-slate-950 p-5 text-white shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="mb-1 text-lg font-black">Capitais importantes</div>
+              <div className="mb-4 text-sm text-slate-400">Escolha quais capitais aparecem com estrela no modo Capitais Imp.</div>
+              <div className="mb-4 grid max-h-[55vh] gap-2 overflow-y-auto pr-1 sm:grid-cols-2 md:grid-cols-3">
+                {ALL_CAPITALS.map((capital) => {
+                  const checked = importantCapitalUfs.includes(capital.uf);
+                  return (
+                    <label key={capital.uf} className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm font-bold text-slate-200">
+                      <span>{capital.name} ({capital.uf})</span>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(event) => {
+                          setImportantCapitalUfs((current) => {
+                            if (event.target.checked) return Array.from(new Set([...current, capital.uf]));
+                            return current.filter((uf) => uf !== capital.uf);
+                          });
+                        }}
+                        className="h-4 w-4 accent-yellow-400"
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+              <div className="flex flex-wrap justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setImportantCapitalUfs(DEFAULT_IMPORTANT_CAPITAL_UFS)}
+                  className="rounded-xl border border-white/10 bg-slate-900 px-4 py-2 text-xs font-black text-slate-200"
+                >
+                  Restaurar padrao
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCapitalPickerOpen(false)}
+                  className="rounded-xl bg-yellow-400 px-4 py-2 text-xs font-black text-slate-950"
+                >
+                  Aplicar
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </motion.div>
