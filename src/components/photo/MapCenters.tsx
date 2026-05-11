@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { geoMercator } from "d3-geo";
 import { STATES } from "../../data/states";
 import {
   getHistoricalMunicipalityCandidatePcts,
@@ -23,6 +24,14 @@ import type {
   StateInfo,
   StateResult,
 } from "../../types";
+
+export type CapitalMarker = {
+  uf: string;
+  name: string;
+  lng: number;
+  lat: number;
+  color: string;
+};
 
 function MunicipalBroadcastDefs() {
   return (
@@ -58,6 +67,8 @@ export function NationalMapCenter({
   results,
   candidateById,
   mapSizePx,
+  stateGeoData,
+  capitalMarkers = [],
   showMunicipalities = false,
   municipalityScenarioKey,
   shadeMunicipalitiesByPct = true,
@@ -67,6 +78,8 @@ export function NationalMapCenter({
   results: Record<string, StateResult>;
   candidateById: Record<number, Candidate>;
   mapSizePx: number;
+  stateGeoData?: any;
+  capitalMarkers?: CapitalMarker[];
   showMunicipalities?: boolean;
   municipalityScenarioKey?: HistoricalMunicipalityScenarioKey;
   shadeMunicipalitiesByPct?: boolean;
@@ -75,6 +88,16 @@ export function NationalMapCenter({
   const [municipalityPaths, setMunicipalityPaths] = useState<RegionalMunicipalityPath[]>([]);
   const [loadingMunicipalities, setLoadingMunicipalities] = useState(false);
   const svgH = Math.round(mapSizePx * (VIEWBOX_HEIGHT / VIEWBOX_WIDTH));
+  const capitalProjection = useMemo(() => {
+    if (capitalMarkers.length === 0) return null;
+    const projection = geoMercator();
+    if (stateGeoData?.features?.length) {
+      projection.fitExtent([[20, 20], [VIEWBOX_WIDTH - 20, VIEWBOX_HEIGHT - 20]], stateGeoData);
+    } else {
+      projection.center([-54, -15]).scale(680).translate([VIEWBOX_WIDTH / 2, VIEWBOX_HEIGHT / 2]);
+    }
+    return projection;
+  }, [capitalMarkers.length, stateGeoData]);
 
   useEffect(() => {
     if (!showMunicipalities || municipalityPaths.length > 0) return;
@@ -176,6 +199,30 @@ export function NationalMapCenter({
             <path key={pathItem.uf} d={pathItem.d} fill={fill} stroke="#1e293b" strokeWidth={1.5} />
           );
         })}
+        {capitalProjection && capitalMarkers.length > 0 && (
+          <g aria-label="Capitais destacadas">
+            {capitalMarkers.map((capital) => {
+              const point = capitalProjection([capital.lng, capital.lat]);
+              if (!point) return null;
+              return (
+                <text
+                  key={`${capital.uf}-${capital.name}`}
+                  x={point[0]}
+                  y={point[1]}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fill={capital.color}
+                  stroke="#020617"
+                  strokeWidth={2.2}
+                  paintOrder="stroke"
+                  style={{ fontSize: 34, fontWeight: 900, filter: "drop-shadow(0 2px 5px rgba(0,0,0,0.65))" }}
+                >
+                  ★
+                </text>
+              );
+            })}
+          </g>
+        )}
       </svg>
     </div>
   );

@@ -3147,6 +3147,7 @@ export function ElectionSimulator({
             candidates={sortedCandidates}
             national={national}
             paths={paths}
+            stateGeoData={stateGeoData}
             results={results}
             photoScale={nationalPhotoScale}
             photoMapScale={photoMapScale}
