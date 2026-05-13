@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:docs": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-docs.ps1",
     "preview": "vite preview",
-    "deploy": "gh-pages -d dist"
+    "deploy": "npm run build:docs"
   },
   "dependencies": {
     "@types/d3-geo": "^3.1.0",
