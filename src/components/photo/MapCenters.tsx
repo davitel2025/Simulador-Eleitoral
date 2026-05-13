@@ -29,6 +29,7 @@ import type {
 export type CapitalMarker = {
   uf: string;
   name: string;
+  code?: string;
   lng: number;
   lat: number;
   color: string;
@@ -54,9 +55,11 @@ function MunicipalBroadcastDefs() {
 function CapitalMarkersLayer({
   projection,
   capitalMarkers,
+  markerSize = 34,
 }: {
   projection: ReturnType<typeof geoMercator> | null;
   capitalMarkers: CapitalMarker[];
+  markerSize?: number;
 }) {
   if (!projection || capitalMarkers.length === 0) return null;
   return (
@@ -75,7 +78,7 @@ function CapitalMarkersLayer({
             stroke="#020617"
             strokeWidth={2.2}
             paintOrder="stroke"
-            style={{ fontSize: 34, fontWeight: 900, filter: "drop-shadow(0 2px 5px rgba(0,0,0,0.65))" }}
+            style={{ fontSize: markerSize, fontWeight: 900, filter: "drop-shadow(0 2px 5px rgba(0,0,0,0.65))" }}
           >
             ★
           </text>
@@ -295,7 +298,7 @@ export function RegionalMapCenter({
             <path key={pathItem.uf} d={pathItem.d} fill={fill} stroke="#1e293b" strokeWidth={1.5} />
           );
         })}
-        <CapitalMarkersLayer projection={capitalProjection} capitalMarkers={capitalMarkers} />
+        <CapitalMarkersLayer projection={capitalProjection} capitalMarkers={capitalMarkers} markerSize={42} />
       </svg>
     </div>
   );
@@ -430,7 +433,7 @@ export function RegionalMunicipalityMapCenter({
             />
           );
         })}
-        <CapitalMarkersLayer projection={capitalProjection} capitalMarkers={capitalMarkers} />
+        <CapitalMarkersLayer projection={capitalProjection} capitalMarkers={capitalMarkers} markerSize={42} />
       </svg>
     </div>
   );

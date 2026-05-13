@@ -2,9 +2,8 @@ import { useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { ALL_CAPITALS, DEFAULT_IMPORTANT_CAPITAL_UFS } from "../../data/capitals";
 import {
-  getHistoricalMunicipalityCandidatePcts,
-  getHistoricalWinnerCandidateId,
-} from "../../data/historicalElectionResults";
+  getCapitalWinnerId,
+} from "../../lib/capitalResults";
 import {
   BottomCandidateCard,
   MapSizeSlider,
@@ -238,14 +237,12 @@ export function NationalPhotoModal({
         ? ALL_CAPITALS.filter((capital) => importantSet.has(capital.uf))
         : [];
     return source.map((capital) => {
-      const officialVotes = getHistoricalMunicipalityCandidatePcts(
+      const winnerId = getCapitalWinnerId({
+        capital,
+        candidates: Object.values(candidateById),
+        results,
         municipalityScenarioKey,
-        capital.uf,
-        capital.name,
-        Object.values(candidateById)
-      );
-      const officialWinner = getHistoricalWinnerCandidateId(officialVotes);
-      const winnerId = officialWinner ?? results[capital.uf]?.winner;
+      });
       const winner = winnerId ? candidateById[winnerId] : null;
       return { ...capital, color: winner?.color ?? "#f8fafc" };
     });

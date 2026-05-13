@@ -2,9 +2,8 @@ import { useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { ALL_CAPITALS } from "../../data/capitals";
 import {
-  getHistoricalMunicipalityCandidatePcts,
-  getHistoricalWinnerCandidateId,
-} from "../../data/historicalElectionResults";
+  getCapitalWinnerId,
+} from "../../lib/capitalResults";
 import { REGIONS, STATES, STATE_BY_UF } from "../../data/states";
 import { buildRegionPaths } from "../../lib/geo";
 import { getWinner } from "../../lib/utils";
@@ -171,14 +170,12 @@ export function RegionalPhotoModal({ region, onRegionChange, candidates, paths, 
     return ALL_CAPITALS
       .filter((capital) => STATE_BY_UF[capital.uf]?.region === region)
       .map((capital) => {
-        const officialVotes = getHistoricalMunicipalityCandidatePcts(
+        const winnerId = getCapitalWinnerId({
+          capital,
+          candidates: Object.values(candidateById),
+          results,
           municipalityScenarioKey,
-          capital.uf,
-          capital.name,
-          Object.values(candidateById)
-        );
-        const officialWinner = getHistoricalWinnerCandidateId(officialVotes);
-        const winnerId = officialWinner ?? results[capital.uf]?.winner;
+        });
         const winner = winnerId ? candidateById[winnerId] : null;
         return { ...capital, color: winner?.color ?? "#f8fafc" };
       });

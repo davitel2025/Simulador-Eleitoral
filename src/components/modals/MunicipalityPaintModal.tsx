@@ -19,6 +19,11 @@ import type {
 
 type MunicipalityEditMode = "manual" | "percentage";
 type MunicipalityContextMenu = { name: string; x: number; y: number; municipalityId: string };
+type MunicipalityPercentageEditor = {
+  code: string;
+  name: string;
+  votes: Record<CandidateId, number>;
+} | null;
 type HoveredMunicipality = { name: string; x: number; y: number };
 
 const HISTORICAL_IMPORT_NUMBERS: Record<"2018" | "2022", string[]> = {
@@ -80,6 +85,7 @@ export function MunicipalityPaintModal({
   const [fillAllCandidate, setFillAllCandidate] = useState<CandidateId | null>(null);
   const [hoveredMunicipality, setHoveredMunicipality] = useState<HoveredMunicipality | null>(null);
   const [contextMenu, setContextMenu] = useState<MunicipalityContextMenu | null>(null);
+  const [percentageEditor, setPercentageEditor] = useState<MunicipalityPercentageEditor>(null);
   const isPaintingRef = useRef(false);
 
   useEffect(() => {
@@ -217,6 +223,46 @@ export function MunicipalityPaintModal({
       else delete updated[pathItem.code];
       return updated;
     });
+  };
+
+  const openPercentageEditor = (pathItem: MunicipalityPath) => {
+    setPercentageEditor({
+      code: pathItem.code,
+      name: pathItem.name,
+      votes: getVotesForPath(pathItem),
+    });
+    setContextMenu(null);
+  };
+
+  const updatePercentageEditorPct = (candidateId: CandidateId, rawValue: number) => {
+    setPercentageEditor((prev) => {
+      if (!prev) return prev;
+      const value = Math.max(0, Math.min(100, rawValue));
+      const otherIds = candidates.map((candidate) => candidate.id).filter((id) => id !== candidateId);
+      const otherCurrentTotal = otherIds.reduce((sum, id) => sum + (prev.votes[id] ?? 0), 0);
+      const remaining = 100 - value;
+      const nextVotes: Record<CandidateId, number> = { ...prev.votes, [candidateId]: value };
+      otherIds.forEach((id) => {
+        nextVotes[id] = otherCurrentTotal > 0
+          ? ((prev.votes[id] ?? 0) / otherCurrentTotal) * remaining
+          : remaining / Math.max(1, otherIds.length);
+      });
+      return { ...prev, votes: nextVotes };
+    });
+  };
+
+  const savePercentageEditor = () => {
+    if (!percentageEditor) return;
+    const votes = normalizeCandidateVotes(percentageEditor.votes);
+    const winner = getWinnerFromVotes(votes);
+    setMunicipalities((prev) => ({ ...prev, [percentageEditor.code]: votes }));
+    setPaint((prev) => {
+      const next = { ...prev };
+      if (winner) next[percentageEditor.code] = winner;
+      else delete next[percentageEditor.code];
+      return next;
+    });
+    setPercentageEditor(null);
   };
 
   const applyPaint = (municipalityCode: string) => {
@@ -668,10 +714,7 @@ export function MunicipalityPaintModal({
                   type="button"
                   onClick={(event) => {
                     event.stopPropagation();
-                    const name = contextMenu.name;
-                    setEditMode("percentage");
-                    setSearchQuery(name);
-                    setContextMenu(null);
+                    if (pathItem) openPercentageEditor(pathItem);
                   }}
                   className="rounded-lg border border-slate-600 px-3 py-1.5 text-xs font-black text-slate-200"
                 >
@@ -686,6 +729,88 @@ export function MunicipalityPaintModal({
                 </button>
               </div>
             </div>
+          );
+        })()}
+        {percentageEditor && (() => {
+          const winnerId = getWinnerFromVotes(percentageEditor.votes);
+          const winnerCandidate = winnerId ? candidateById[winnerId] : null;
+          return (
+            <motion.div
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.98 }}
+              transition={{ duration: 0.14 }}
+              className="fixed left-1/2 top-8 z-[100] w-[min(520px,calc(100%-32px))] -translate-x-1/2 rounded-2xl border border-white/15 bg-slate-950/95 p-4 text-white shadow-2xl backdrop-blur-xl"
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm font-black">{percentageEditor.name}</div>
+                  <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                    {stateInfo.name} - {stateInfo.uf}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPercentageEditor(null)}
+                  className="rounded-lg border border-white/10 px-2 py-1 text-xs font-black text-slate-300 hover:bg-white/10"
+                >
+                  Fechar
+                </button>
+              </div>
+              {winnerCandidate && (
+                <div
+                  className="mb-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-black"
+                  style={{ color: winnerCandidate.color }}
+                >
+                  Vence: {winnerCandidate.name}
+                </div>
+              )}
+              <div className="space-y-2">
+                {candidates.map((candidate) => (
+                  <label key={candidate.id} className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2">
+                    <span className="w-28 truncate text-xs font-black" style={{ color: candidate.color }}>
+                      {candidate.name}
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={0.1}
+                      value={percentageEditor.votes[candidate.id] ?? 0}
+                      onChange={(event) => updatePercentageEditorPct(candidate.id, Number(event.target.value))}
+                      className="h-2 min-w-0 flex-1 appearance-none rounded-full bg-slate-700 accent-emerald-500"
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.1}
+                      value={(percentageEditor.votes[candidate.id] ?? 0).toFixed(1)}
+                      onChange={(event) => updatePercentageEditorPct(candidate.id, Number(event.target.value))}
+                      className="w-20 rounded-lg border border-white/10 bg-slate-950 px-2 py-1 text-right text-xs font-bold text-white"
+                    />
+                  </label>
+                ))}
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPercentageEditor(null)}
+                  className="rounded-xl border border-white/10 px-4 py-2 text-xs font-bold text-slate-300 hover:bg-white/10"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={savePercentageEditor}
+                  className="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-black text-zinc-950 hover:bg-emerald-400"
+                >
+                  Confirmar
+                </button>
+              </div>
+            </motion.div>
           );
         })()}
       </motion.div>
