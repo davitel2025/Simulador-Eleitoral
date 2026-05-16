@@ -355,11 +355,6 @@ export function CandidateSetupScreen({
             </div>
 
             <div className="mb-8 grid gap-5">
-              <datalist id="candidate-titular-options">
-                {candidates.map((candidate) => (
-                  <option key={candidate.id} value={candidate.name} />
-                ))}
-              </datalist>
               {candidates.map((candidate, index) => (
                 <motion.div
                   key={candidate.id}
@@ -397,16 +392,9 @@ export function CandidateSetupScreen({
                     )}
                   </div>
 
-                  <div className="mb-4 grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+                  <div className="mb-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
                     <CandidateField label="Nome" value={candidate.name} onChange={(value) => updateCandidate(candidate.id, { name: value })} placeholder="Nome" />
                     <CandidateField label="Vice" value={candidate.vice} onChange={(value) => updateCandidate(candidate.id, { vice: value })} placeholder="Vice" />
-                    <CandidateField
-                      label="Titular"
-                      value={candidate.titular || ""}
-                      onChange={(value) => updateCandidate(candidate.id, { titular: value })}
-                      placeholder="Titular"
-                      list="candidate-titular-options"
-                    />
                     <CandidateField label="Partido" value={candidate.party} onChange={(value) => updateCandidate(candidate.id, { party: value })} placeholder="Partido" />
                     <CandidateField label="Numero" value={candidate.number} onChange={(value) => updateCandidate(candidate.id, { number: value })} placeholder="Numero" />
                   </div>
@@ -423,7 +411,7 @@ export function CandidateSetupScreen({
                     />
                   </label>
 
-                  <div className="grid gap-3 md:grid-cols-[140px_1fr_1fr_1fr_1fr]">
+                  <div className="grid gap-3 md:grid-cols-[140px_1fr_1fr_1fr]">
                     <label>
                       <span className="mb-1.5 block text-[10px] font-black uppercase tracking-wider text-slate-500">Cor</span>
                       <input
@@ -435,7 +423,6 @@ export function CandidateSetupScreen({
                     </label>
                     <FileUploadField label="Foto" currentFile={candidate.photo} onUpload={(photo) => updateCandidate(candidate.id, { photo })} onRemove={() => updateCandidate(candidate.id, { photo: undefined })} rounded="rounded-full" />
                     <FileUploadField label="Foto Vice" currentFile={candidate.vicePhoto} onUpload={(vicePhoto) => updateCandidate(candidate.id, { vicePhoto })} onRemove={() => updateCandidate(candidate.id, { vicePhoto: undefined })} rounded="rounded-full" />
-                    <FileUploadField label="Foto Titular" currentFile={candidate.titularPhoto} onUpload={(titularPhoto) => updateCandidate(candidate.id, { titularPhoto })} onRemove={() => updateCandidate(candidate.id, { titularPhoto: undefined })} rounded="rounded-full" />
                     <FileUploadField label="Logo" currentFile={candidate.partyLogo} onUpload={(partyLogo) => updateCandidate(candidate.id, { partyLogo })} onRemove={() => updateCandidate(candidate.id, { partyLogo: undefined })} />
                   </div>
                 </motion.div>

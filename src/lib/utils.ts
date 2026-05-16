@@ -1,4 +1,4 @@
-import type { CandidateId } from "../types";
+import type { Candidate, CandidateId } from "../types";
 
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -47,4 +47,12 @@ export function normalizeVotesForCandidates(
   }
   for (const id of candidateIds) filtered[id] = (filtered[id] / total) * 100;
   return filtered;
+}
+
+export function sanitizeCandidate(candidate: Candidate): Candidate {
+  const { titular: _titular, titularPhoto: _titularPhoto, ...rest } = candidate as Candidate & {
+    titular?: string;
+    titularPhoto?: string;
+  };
+  return rest;
 }

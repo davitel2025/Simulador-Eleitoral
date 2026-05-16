@@ -15,8 +15,6 @@ export interface Candidate {
   color: string;
   photo?: string;
   vicePhoto?: string;
-  titular?: string;
-  titularPhoto?: string;
   partyLogo?: string;
   ideology?: string;
   coalition?: string;
@@ -27,6 +25,7 @@ export interface StateInfo {
   uf: string;
   name: string;
   region: RegionName;
+  // Campos legacy: representam eleitorado apto por UF, nao votos validos.
   voters: number;
   voters2018: number;
   voters2022: number;
@@ -83,7 +82,7 @@ export interface PoliticalScenario {
   results?: Record<string, Record<number, number>>;
   nationalResults?: Record<number, number>; // percentuais nacionais por ordem de candidato do cenário
   customStates?: CustomStateInfo[]; // para cenários personalizados
-  nationalVoters?: number; // eleitorado nacional total (distribui proporcionalmente por estado)
+  nationalVoters?: number; // eleitorado/votos totais do cenário, conforme origem do cenário
   municipalityResultStrategy?: HistoricalMunicipalityScenarioKey;
   isCustom?: boolean;
   generatedAt?: string;

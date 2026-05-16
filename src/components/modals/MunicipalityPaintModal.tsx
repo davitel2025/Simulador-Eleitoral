@@ -11,6 +11,7 @@ import {
 import type {
   Candidate,
   CandidateId,
+  ElectionRound,
   HistoricalMunicipalityScenarioKey,
   MunicipalityMapStyle,
   MunicipalityPath,
@@ -26,10 +27,20 @@ type MunicipalityPercentageEditor = {
 } | null;
 type HoveredMunicipality = { name: string; x: number; y: number };
 
-const HISTORICAL_IMPORT_NUMBERS: Record<"2018" | "2022", string[]> = {
+const HISTORICAL_IMPORT_NUMBERS: Record<HistoricalMunicipalityScenarioKey, string[]> = {
+  "2018_1t": ["17", "13", "12", "45", "30", "15", "51", "18", "19", "50", "16", "27", "54"],
   "2018": ["17", "13"],
+  "2022_1t": ["13", "22", "15", "12", "44", "30", "14", "21", "16", "27", "80"],
   "2022": ["13", "22"],
 };
+
+function getHistoricalBaseYear(key: HistoricalMunicipalityScenarioKey): "2018" | "2022" {
+  return key.startsWith("2022") ? "2022" : "2018";
+}
+
+function getHistoricalImportLabel(key: HistoricalMunicipalityScenarioKey): string {
+  return `${getHistoricalBaseYear(key)} (${key.includes("_1t") ? "1o turno" : "2o turno"})`;
+}
 
 function getHistoricalImportNumberForCandidate(
   candidate: Candidate,
@@ -38,13 +49,37 @@ function getHistoricalImportNumberForCandidate(
 ): string {
   const name = candidate.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const party = candidate.party.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  if (keyToImport === "2018") {
+  const importNumbers = HISTORICAL_IMPORT_NUMBERS[keyToImport] ?? [];
+  if (importNumbers.includes(candidate.number)) return candidate.number;
+  if (getHistoricalBaseYear(keyToImport) === "2018") {
+    if (candidate.number === "22") return "17";
     if (name.includes("bolsonaro") || party === "pl" || party === "psl") return "17";
     if (name.includes("lula") || name.includes("haddad") || party === "pt") return "13";
+    if (name.includes("ciro") || party === "pdt") return "12";
+    if (name.includes("alckmin") || party === "psdb") return "45";
+    if (name.includes("amoedo") || party === "novo") return "30";
+    if (name.includes("meirelles") || party === "mdb") return "15";
+    if (name.includes("daciolo") || party === "patri") return "51";
+    if (name.includes("marina") || party === "rede") return "18";
+    if (name.includes("alvaro") || party === "pode") return "19";
+    if (name.includes("boulos") || party === "psol") return "50";
+    if (name.includes("vera") || party === "pstu") return "16";
+    if (name.includes("eymael") || party === "dc") return "27";
+    if (name.includes("goulart") || party === "ppl") return "54";
   }
-  if (keyToImport === "2022") {
+  if (getHistoricalBaseYear(keyToImport) === "2022") {
+    if (candidate.number === "17") return "22";
     if (name.includes("bolsonaro") || party === "pl" || party === "psl") return "22";
     if (name.includes("lula") || name.includes("haddad") || party === "pt") return "13";
+    if (name.includes("tebet") || party === "mdb") return "15";
+    if (name.includes("ciro") || party === "pdt") return "12";
+    if (name.includes("soraya") || party.includes("uniao")) return "44";
+    if (name.includes("felipe") || party === "novo") return "30";
+    if (name.includes("kelmon") || party === "ptb") return "14";
+    if (name.includes("sofia") || party === "pcb") return "21";
+    if (name.includes("vera") || party === "pstu") return "16";
+    if (name.includes("eymael") || party === "dc") return "27";
+    if (name.includes("leo") || party === "up") return "80";
   }
   return fallbackNumber ?? candidate.number;
 }
@@ -55,6 +90,7 @@ export function MunicipalityPaintModal({
   initialPaint,
   initialMunicipalities,
   scenarioKey,
+  electionRound,
   onClose,
   onSave,
 }: {
@@ -63,6 +99,7 @@ export function MunicipalityPaintModal({
   initialPaint: Record<string, CandidateId>;
   initialMunicipalities: Record<string, Record<CandidateId, number>>;
   scenarioKey?: HistoricalMunicipalityScenarioKey;
+  electionRound: ElectionRound;
   onClose: () => void;
   onSave: (
     paint: Record<string, CandidateId>,
@@ -87,6 +124,8 @@ export function MunicipalityPaintModal({
   const [contextMenu, setContextMenu] = useState<MunicipalityContextMenu | null>(null);
   const [percentageEditor, setPercentageEditor] = useState<MunicipalityPercentageEditor>(null);
   const isPaintingRef = useRef(false);
+  const historicalImportOptions: HistoricalMunicipalityScenarioKey[] =
+    electionRound === "primeiro" ? ["2018_1t", "2022_1t"] : ["2018", "2022"];
 
   useEffect(() => {
     let active = true;
@@ -304,7 +343,7 @@ export function MunicipalityPaintModal({
     setImportScenarioKey(keyToImport);
     const nextPaint: Record<string, CandidateId> = {};
     const nextMunicipalities: Record<string, Record<CandidateId, number>> = {};
-    const importNumbers = HISTORICAL_IMPORT_NUMBERS[keyToImport === "2022" ? "2022" : "2018"];
+    const importNumbers = HISTORICAL_IMPORT_NUMBERS[keyToImport];
     paths.forEach((path) => {
       const votesByNumber = getHistoricalMunicipalityVotes(
         keyToImport,
@@ -332,7 +371,7 @@ export function MunicipalityPaintModal({
     });
     setPaint(nextPaint);
     setMunicipalities(nextMunicipalities);
-    setImportMessage(`Municipios de ${keyToImport.startsWith("2022") ? "2022" : "2018"} importados!`);
+    setImportMessage(`Municipios de ${getHistoricalImportLabel(keyToImport)} importados!`);
     window.setTimeout(() => setImportMessage(""), 2500);
   };
 
@@ -478,7 +517,7 @@ export function MunicipalityPaintModal({
             {importMessage && <span className="text-xs font-black text-emerald-300">{importMessage}</span>}
           </div>
           <div className="flex gap-2 flex-wrap">
-            {(["2018", "2022"] as HistoricalMunicipalityScenarioKey[]).map((key) => (
+            {historicalImportOptions.map((key) => (
               <button
                 key={key}
                 type="button"
@@ -488,7 +527,7 @@ export function MunicipalityPaintModal({
                   importScenarioKey === key ? "border-cyan-300 bg-cyan-400/20 text-cyan-100" : "border-cyan-400/40 bg-slate-950/40 text-cyan-200"
                 }`}
               >
-                Baixar municipios de {key}
+                Baixar municipios de {getHistoricalImportLabel(key)}
               </button>
             ))}
           </div>

@@ -1,13 +1,22 @@
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { type ChangeEvent, useRef, useState } from "react";
 import { POLITICAL_SCENARIOS } from "../../data/scenarios";
 import { STATES } from "../../data/states";
+import {
+  ELECTORATE_PROJECTION_BY_UF,
+  ELECTORATE_PROJECTION_SOURCE,
+} from "../../data/electorateProjection";
+import { distributeNationalElectorate } from "../../lib/electorate";
 import type { ElectionRound, PoliticalScenario, CustomStateInfo } from "../../types";
 
 type InitialView = "home" | "scenarios" | "custom";
 
-// Total padrão do eleitorado nacional (projeção 2026)
-const DEFAULT_NATIONAL_VOTERS = STATES.reduce((sum, s) => sum + s.voters, 0);
+// Base padrao de votos validos para cenarios personalizados de 2026.
+const DEFAULT_NATIONAL_VOTERS = 122_000_000;
+
+function formatInteger(value: number): string {
+  return Math.round(Number.isFinite(value) ? value : 0).toLocaleString("pt-BR");
+}
 
 function getScenarioRound(scenario: PoliticalScenario): ElectionRound {
   return scenario.round ?? "segundo";
@@ -85,10 +94,11 @@ function CustomScenarioBuilder({
   onSelectScenario: (scenario: PoliticalScenario) => void;
 }) {
   const [year, setYear] = useState(2026);
+  const [round, setRound] = useState<ElectionRound>("primeiro");
   const [selectedUFs, setSelectedUFs] = useState<string[]>(STATES.map((s) => s.uf));
 
   // Modo de eleitorado: "estado" = por estado individual | "nacional" = total nacional distribuído
-  const [electorateMode, setElectorateMode] = useState<"estado" | "nacional">("estado");
+  const [electorateMode, setElectorateMode] = useState<"estado" | "nacional">("nacional");
 
   // Eleitorado nacional total (quando modo = "nacional")
   const [nationalVotersInput, setNationalVotersInput] = useState(DEFAULT_NATIONAL_VOTERS);
@@ -114,23 +124,28 @@ function CustomScenarioBuilder({
     }
   };
 
-  // Calcula o peso proporcional de cada estado selecionado em relação ao total dos selecionados
-  const getTotalDefaultVoters = () =>
-    STATES.filter((s) => selectedUFs.includes(s.uf)).reduce(
-      (sum, s) => sum + s.voters,
-      0
-    );
-
-  // Quando modo nacional: calcula os voters de cada estado proporcional ao eleitorado padrão
-  const getNationalDistributedVoters = (): Record<string, number> => {
-    const totalDefault = getTotalDefaultVoters();
-    if (totalDefault === 0) return {};
-    const result: Record<string, number> = {};
-    STATES.filter((s) => selectedUFs.includes(s.uf)).forEach((s) => {
-      result[s.uf] = Math.round((s.voters / totalDefault) * nationalVotersInput);
-    });
-    return result;
-  };
+  const selectedStates = STATES.filter((s) => selectedUFs.includes(s.uf));
+  const distributedVoters =
+    electorateMode === "nacional"
+      ? distributeNationalElectorate(nationalVotersInput, selectedUFs)
+      : {};
+  const distributedTotal = Object.values(distributedVoters).reduce(
+    (sum, value) => sum + value,
+    0,
+  );
+  const distributionPreview = selectedStates
+    .map((state) => {
+      const voters = distributedVoters[state.uf] ?? 0;
+      const projection = ELECTORATE_PROJECTION_BY_UF[state.uf];
+      return {
+        ...state,
+        voters,
+        percent: nationalVotersInput > 0 ? (voters / nationalVotersInput) * 100 : 0,
+        growthRate: projection?.growthRate2022To2026 ?? 0,
+      };
+    })
+    .sort((a, b) => b.voters - a.voters);
+  const maxDistributedVoters = distributionPreview[0]?.voters ?? 0;
 
   const handleConfirm = () => {
     if (selectedUFs.length === 0) {
@@ -140,7 +155,7 @@ function CustomScenarioBuilder({
 
     let finalVoters: Record<string, number>;
     if (electorateMode === "nacional") {
-      finalVoters = getNationalDistributedVoters();
+      finalVoters = distributedVoters;
     } else {
       finalVoters = customVoters;
     }
@@ -154,11 +169,21 @@ function CustomScenarioBuilder({
       id: `custom_${Date.now()}`,
       name: `Cenário Personalizado ${year}`,
       year,
-      description: `Cenário criado manualmente para ${year} com ${selectedUFs.length} estado(s)`,
-      candidates: [
-        { name: "Candidato A", vice: "Vice A", party: "Partido A", number: "1", color: "#dc2626" },
-        { name: "Candidato B", vice: "Vice B", party: "Partido B", number: "2", color: "#1e40af" },
-      ],
+      description:
+        electorateMode === "nacional"
+          ? `Cenário criado manualmente para ${year} com ${formatInteger(nationalVotersInput)} votos em ${selectedUFs.length} estado(s)`
+          : `Cenário criado manualmente para ${year} com ${selectedUFs.length} estado(s)`,
+      candidates: round === "primeiro"
+        ? [
+            { name: "Candidato 1", vice: "Vice 1", party: "Partido 1", number: "13", color: "#dc2626" },
+            { name: "Candidato 2", vice: "Vice 2", party: "Partido 2", number: "22", color: "#1e40af" },
+            { name: "Candidato 3", vice: "Vice 3", party: "Partido 3", number: "12", color: "#f97316" },
+          ]
+        : [
+            { name: "Candidato 1", vice: "Vice 1", party: "Partido 1", number: "13", color: "#dc2626" },
+            { name: "Candidato 2", vice: "Vice 2", party: "Partido 2", number: "22", color: "#1e40af" },
+          ],
+      round,
       customStates,
       nationalVoters: electorateMode === "nacional" ? nationalVotersInput : undefined,
       isCustom: true,
@@ -167,9 +192,6 @@ function CustomScenarioBuilder({
   };
 
   const REGIONS = ["Norte", "Nordeste", "Centro-Oeste", "Sudeste", "Sul"] as const;
-
-  // Para exibir os voters distribuídos quando modo = "nacional"
-  const distributedVoters = electorateMode === "nacional" ? getNationalDistributedVoters() : {};
 
   return (
     <div className="space-y-5">
@@ -183,6 +205,37 @@ function CustomScenarioBuilder({
         </svg>
         Voltar
       </button>
+
+      {/* Turno */}
+      <div className="rounded-2xl border border-white/10 bg-slate-900/50 p-5">
+        <h3 className="text-lg font-black text-white mb-4">Turno do Cenario</h3>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => setRound("primeiro")}
+            className={`rounded-2xl border p-4 text-left transition-all ${
+              round === "primeiro"
+                ? "border-violet-400/60 bg-violet-500/20 text-white"
+                : "border-white/10 bg-slate-950/50 text-slate-300 hover:border-white/20"
+            }`}
+          >
+            <div className="text-lg font-black">Primeiro Turno</div>
+            <div className="mt-1 text-xs text-slate-400">Multiplos candidatos e adicao livre.</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setRound("segundo")}
+            className={`rounded-2xl border p-4 text-left transition-all ${
+              round === "segundo"
+                ? "border-emerald-400/60 bg-emerald-500/20 text-white"
+                : "border-white/10 bg-slate-950/50 text-slate-300 hover:border-white/20"
+            }`}
+          >
+            <div className="text-lg font-black">Segundo Turno</div>
+            <div className="mt-1 text-xs text-slate-400">Confronto limitado a 2 candidatos.</div>
+          </button>
+        </div>
+      </div>
 
       {/* Ano */}
       <div className="rounded-2xl border border-white/10 bg-slate-900/50 p-5">
@@ -247,13 +300,19 @@ function CustomScenarioBuilder({
         })}
       </div>
 
-      {/* Eleitorado — modo */}
+      {/* Eleitorado */}
       <div className="rounded-2xl border border-white/10 bg-slate-900/50 p-5">
-        <h3 className="text-lg font-black text-white mb-2">👥 Eleitorado</h3>
-        <p className="text-xs text-slate-500 mb-4">
-          Escolha como definir o número de eleitores: por estado individual ou um total nacional
-          distribuído proporcionalmente.
-        </p>
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h3 className="text-lg font-black text-white">Eleitorado</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Defina a base por UF ou informe um total nacional de votos para redistribuir.
+            </p>
+          </div>
+          <div className="rounded-xl border border-violet-400/20 bg-violet-500/10 px-3 py-2 text-xs font-bold text-violet-200">
+            Projecao 2026 por UF baseada em tendencia TSE
+          </div>
+        </div>
 
         {/* Toggle de modo */}
         <div className="flex rounded-xl border border-white/10 bg-slate-900 p-1 w-fit mb-5">
@@ -266,7 +325,7 @@ function CustomScenarioBuilder({
                 : "text-slate-400 hover:text-slate-200"
             }`}
           >
-            🗺️ Por estado
+            Por estado
           </button>
           <button
             type="button"
@@ -277,7 +336,7 @@ function CustomScenarioBuilder({
                 : "text-slate-400 hover:text-slate-200"
             }`}
           >
-            🌎 Total nacional
+            Total nacional
           </button>
         </div>
 
@@ -286,52 +345,118 @@ function CustomScenarioBuilder({
           <div className="space-y-4">
             <div className="rounded-xl border border-violet-500/30 bg-violet-500/5 p-4">
               <label className="block text-xs font-black uppercase tracking-widest text-violet-400 mb-2">
-                Total de votos válidos no país
+                Total nacional informado
               </label>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <input
                   type="number"
                   value={nationalVotersInput}
                   min={1}
                   onChange={(e) => setNationalVotersInput(Number(e.target.value))}
-                  className="w-52 rounded-xl border border-violet-500/40 bg-slate-950 px-4 py-2.5 text-lg font-black text-white focus:outline-none focus:border-violet-400"
+                  className="w-full rounded-xl border border-violet-500/40 bg-slate-950 px-4 py-2.5 text-lg font-black text-white focus:outline-none focus:border-violet-400 sm:w-56"
                 />
-                <span className="text-sm text-slate-400">eleitores</span>
+                <span className="text-sm text-slate-400">votos</span>
               </div>
               <p className="text-xs text-slate-500 mt-2">
-                Os votos serão distribuídos proporcionalmente entre os estados selecionados,
-                respeitando o peso eleitoral histórico de cada um.
+                A distribuicao usa pesos estaduais projetados para 2026. Estados com maior
+                crescimento relativo desde 2022 recebem peso ajustado.
               </p>
             </div>
 
-            {/* Preview da distribuição */}
+            <div className="grid gap-3 md:grid-cols-4">
+              <div className="rounded-xl border border-white/10 bg-slate-950/70 p-3">
+                <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  Total informado
+                </div>
+                <div className="mt-1 text-lg font-black text-white">
+                  {formatInteger(nationalVotersInput)}
+                </div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-slate-950/70 p-3">
+                <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  Total distribuido
+                </div>
+                <div className="mt-1 text-lg font-black text-violet-200">
+                  {formatInteger(distributedTotal)}
+                </div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-slate-950/70 p-3">
+                <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  Estados
+                </div>
+                <div className="mt-1 text-lg font-black text-white">
+                  {selectedUFs.length}
+                </div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-slate-950/70 p-3">
+                <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  Pesos
+                </div>
+                <div className="mt-1 text-xs font-bold leading-snug text-slate-300">
+                  TSE Atual {ELECTORATE_PROJECTION_SOURCE.latestGeneratedAt}
+                </div>
+              </div>
+            </div>
+
+            {/* Preview da distribuicao */}
             {selectedUFs.length > 0 && (
               <div>
-                <div className="text-xs font-black uppercase tracking-widest text-slate-500 mb-2">
-                  Preview da distribuição
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div className="text-xs font-black uppercase tracking-widest text-slate-500">
+                    Preview da distribuicao
+                  </div>
+                  <div className="text-[11px] font-bold text-slate-500">
+                    Ordenado por maior eleitorado
+                  </div>
                 </div>
-                <div className="grid gap-1.5 md:grid-cols-2 max-h-64 overflow-y-auto pr-1">
-                  {STATES.filter((s) => selectedUFs.includes(s.uf)).map((state) => (
+                <div className="grid max-h-80 gap-2 overflow-y-auto pr-1 lg:grid-cols-2">
+                  {distributionPreview.map((state, index) => (
                     <div
                       key={state.uf}
-                      className="flex items-center gap-2 rounded-lg border border-white/5 bg-slate-950/60 px-3 py-1.5"
+                      className={`rounded-xl border bg-slate-950/70 p-3 ${
+                        index < 5
+                          ? "border-violet-400/30 shadow-lg shadow-violet-950/20"
+                          : "border-white/10"
+                      }`}
                     >
-                      <div className="w-8 text-xs font-black text-slate-400">{state.uf}</div>
-                      <div className="flex-1 text-xs text-slate-500 truncate">{state.name}</div>
-                      <div className="text-xs font-bold text-violet-300">
-                        {(distributedVoters[state.uf] ?? 0).toLocaleString("pt-BR")}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-black text-white">{state.uf}</span>
+                            <span className="truncate text-xs font-bold text-slate-400">
+                              {state.name}
+                            </span>
+                          </div>
+                          <div className="mt-0.5 text-[11px] font-bold text-slate-500">
+                            {state.region} · {(state.growthRate * 100).toFixed(2)}% desde 2022
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-black text-violet-200">
+                            {formatInteger(state.voters)}
+                          </div>
+                          <div className="text-[11px] font-bold text-slate-500">
+                            {state.percent.toFixed(2)}%
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-800">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-violet-500 to-cyan-400"
+                          style={{
+                            width: `${
+                              maxDistributedVoters > 0
+                                ? Math.max(4, (state.voters / maxDistributedVoters) * 100)
+                                : 0
+                            }%`,
+                          }}
+                        />
                       </div>
                     </div>
                   ))}
                 </div>
-                <div className="mt-2 text-right text-xs text-slate-500">
-                  Total distribuído:{" "}
-                  <span className="font-black text-violet-300">
-                    {Object.values(distributedVoters)
-                      .reduce((a, b) => a + b, 0)
-                      .toLocaleString("pt-BR")}
-                  </span>{" "}
-                  (pode diferir por arredondamento)
+                <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/80">
+                  Projecao sujeita a atualizacao conforme dados oficiais do TSE.
                 </div>
               </div>
             )}
@@ -342,10 +467,10 @@ function CustomScenarioBuilder({
         {electorateMode === "estado" && (
           <div>
             <p className="text-xs text-slate-500 mb-3">
-              Ajuste a quantidade de eleitores de cada estado participante (padrão: projeção 2026)
+              Ajuste a quantidade de votos de cada estado participante (padrao: projecao 2026).
             </p>
             <div className="grid gap-2 md:grid-cols-2">
-              {STATES.filter((s) => selectedUFs.includes(s.uf)).map((state) => (
+              {selectedStates.map((state) => (
                 <div
                   key={state.uf}
                   className="flex items-center gap-3 rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2"
@@ -377,7 +502,7 @@ function CustomScenarioBuilder({
         disabled={selectedUFs.length === 0}
         className="w-full rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 px-8 py-5 text-lg font-black text-white shadow-2xl transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        Configurar Candidatos →
+        Configurar {round === "primeiro" ? "Primeiro" : "Segundo"} Turno →
       </button>
     </div>
   );
@@ -386,11 +511,14 @@ function CustomScenarioBuilder({
 export function InitialScreen({
   onSelect,
   onSelectScenario,
+  onImportScenario,
 }: {
   onSelect: (round: ElectionRound) => void;
   onSelectScenario: (scenario: PoliticalScenario) => void;
+  onImportScenario: (payload: unknown) => boolean;
 }) {
   const [view, setView] = useState<InitialView>("home");
+  const importRef = useRef<HTMLInputElement>(null);
   const groupedScenarios = POLITICAL_SCENARIOS.reduce<Record<string, PoliticalScenario[]>>(
     (groups, scenario) => {
       const title = getScenarioGroupTitle(scenario);
@@ -399,6 +527,24 @@ export function InitialScreen({
     },
     {}
   );
+
+  const handleImportScenario = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (readerEvent) => {
+      try {
+        const payload = JSON.parse(String(readerEvent.target?.result ?? ""));
+        if (!onImportScenario(payload)) {
+          throw new Error("invalid scenario");
+        }
+      } catch {
+        alert("Arquivo inválido. Importe um JSON exportado pelo simulador.");
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = "";
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-zinc-950 flex items-center justify-center p-4">
@@ -489,6 +635,28 @@ export function InitialScreen({
                 </p>
               </div>
             </motion.button>
+
+            <motion.button
+              type="button"
+              onClick={() => importRef.current?.click()}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="group relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-cyan-600/20 to-sky-900/20 p-8 text-left shadow-2xl transition-all hover:border-white/20"
+            >
+              <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-cyan-500/10 blur-3xl transition-all group-hover:bg-cyan-500/20" />
+              <div className="relative z-10">
+                <div className="mb-4 text-4xl">📁</div>
+                <h2 className="text-3xl font-black text-white mb-2">Importar cenário</h2>
+                <p className="text-slate-400">Abra um JSON exportado pelo simulador</p>
+              </div>
+            </motion.button>
+            <input
+              ref={importRef}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={handleImportScenario}
+            />
           </div>
         )}
 

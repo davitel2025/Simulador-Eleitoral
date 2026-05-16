@@ -11,25 +11,6 @@ type PhotoTypographyProps = {
   useCandidateFontColor?: boolean;
 };
 
-function TitularBadge({ candidate }: { candidate: Candidate }) {
-  const titular = candidate.titular?.trim();
-  if (!titular) return null;
-  return (
-    <div className="absolute left-1 top-1 z-20 flex max-w-[88%] items-center gap-1.5 rounded bg-black/50 px-1.5 py-1 text-left shadow-lg backdrop-blur-sm">
-      {candidate.titularPhoto && (
-        <SafeImage
-          src={candidate.titularPhoto}
-          alt={titular}
-          className="h-8 w-8 flex-shrink-0 rounded-full object-cover"
-        />
-      )}
-      <span className="truncate text-[10px] font-bold leading-tight text-slate-100">
-        Titular: {titular}
-      </span>
-    </div>
-  );
-}
-
 // ─── Configuração do retângulo ao redor dos top candidatos ───────────────────
 export interface WinnerBoxConfig {
   show: boolean;
@@ -407,7 +388,6 @@ export function TopCandidateCard({
       style={frameStyle}
       aria-label={rankLabel}
     >
-      <TitularBadge candidate={candidate} />
       {candidate.partyLogo && (
         <div className="mb-3 h-10 w-auto flex items-center justify-center">
           <SafeImage
@@ -509,7 +489,6 @@ export function BottomCandidateCard({
       className="relative rounded-2xl border bg-slate-900/40 p-4 text-center flex flex-col items-center"
       style={{ borderColor: `${candidate.color}30` }}
     >
-      <TitularBadge candidate={candidate} />
       {candidate.partyLogo && (
         <div className="mb-2 h-7 flex items-center justify-center">
           <SafeImage
@@ -634,7 +613,6 @@ function VerticalCandidatePanel({
 
   return (
     <div className="relative flex min-w-0 flex-1 flex-col items-center">
-      <TitularBadge candidate={candidate} />
       <div className="relative mb-5 pt-7">
         {candidate.partyLogo && (
           <div className="absolute left-1/2 top-0 z-30 flex h-14 max-w-[150px] -translate-x-1/2 items-center justify-center rounded-xl bg-white px-3 py-2 shadow-2xl">

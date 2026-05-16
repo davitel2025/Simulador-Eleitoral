@@ -23,6 +23,7 @@ import {
   formatPct,
   getWinner,
   normalizeVotesForCandidates,
+  sanitizeCandidate,
 } from "../../lib/utils";
 import {
   HISTORICAL_MUNICIPALITY_RESULTS,
@@ -202,6 +203,8 @@ export function ElectionSimulator({
   onRoundChange,
   onRestart,
   loadedScenario,
+  initialResults,
+  onImportScenario,
 }: {
   round: ElectionRound;
   candidates: Candidate[];
@@ -209,8 +212,12 @@ export function ElectionSimulator({
   onRoundChange: (round: ElectionRound) => void;
   onRestart: () => void;
   loadedScenario?: PoliticalScenario | null;
+  initialResults?: Record<string, StateResult> | null;
+  onImportScenario?: (payload: unknown) => boolean;
 }) {
-  const [results, setResults] = useState<Record<string, StateResult>>({});
+  const [results, setResults] = useState<Record<string, StateResult>>(
+    () => initialResults ?? {}
+  );
   const [paths, setPaths] = useState<PathData[]>([]);
   const [municipalityPaths, setMunicipalityPaths] = useState<RegionalMunicipalityPath[]>([]);
   const [mapMunicipalityMode, setMapMunicipalityMode] = useState(false);
@@ -629,6 +636,11 @@ export function ElectionSimulator({
     }
     setResults(newResults);
   }, [loadedScenario, candidates, municipalityPaths, buildMunicipalityDataByUf]);
+
+  useEffect(() => {
+    if (!initialResults) return;
+    setResults(initialResults);
+  }, [initialResults]);
 
   useEffect(() => {
     setMapMunicipalityMode(false);
@@ -1106,10 +1118,35 @@ export function ElectionSimulator({
   const handleExport = () => {
     const roundSlug = round === "primeiro" ? "1turno" : "2turno";
     const yearSlug = scenarioYear ?? new Date().getFullYear();
+    const municipalityResults = Object.fromEntries(
+      Object.entries(results).map(([uf, result]) => [
+        uf,
+        {
+          municipalities: result.municipalities ?? {},
+          municipalityPaint: result.municipalityPaint ?? {},
+          usesMunicipalities:
+            Object.keys(result.municipalityPaint ?? {}).length > 0,
+        },
+      ])
+    );
     const payload = {
       round,
-      candidates,
+      year: yearSlug,
+      scenario: {
+        name: loadedScenario?.name ?? "Cenario exportado",
+        year: yearSlug,
+        round,
+        description: loadedScenario?.description ?? "Cenario exportado pelo simulador.",
+        customStates: loadedScenario?.customStates,
+        nationalVoters: loadedScenario?.nationalVoters,
+        nationalResults: loadedScenario?.nationalResults,
+        isCustom: loadedScenario?.isCustom ?? true,
+      },
+      customStates: loadedScenario?.customStates,
+      nationalVoters: loadedScenario?.nationalVoters,
+      candidates: candidates.map(sanitizeCandidate),
       results,
+      municipalities: municipalityResults,
       generatedAt: new Date().toISOString(),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -1132,26 +1169,38 @@ export function ElectionSimulator({
       try {
         const text = String(e.target?.result ?? "");
         const payload = JSON.parse(text);
+        if (onImportScenario?.(payload)) {
+          pushToast("Cenario importado com sucesso!");
+          return;
+        }
         if (payload.candidates && Array.isArray(payload.candidates)) {
-          onCandidatesChange(payload.candidates);
+          onCandidatesChange(payload.candidates.map(sanitizeCandidate));
         }
         if (payload.round === "primeiro" || payload.round === "segundo") {
           onRoundChange(payload.round);
         }
         if (payload.results && typeof payload.results === "object") {
+          const payloadMunicipalities =
+            payload.municipalities && typeof payload.municipalities === "object"
+              ? (payload.municipalities as Record<string, any>)
+              : {};
           const normalized: Record<string, StateResult> = {};
           for (const [uf, result] of Object.entries(
             payload.results as Record<string, any>
           )) {
             const votes = result.votes ?? {};
+            const municipalityPayload = payloadMunicipalities[uf] ?? {};
             normalized[uf] = {
               uf,
               votes,
               winner: result.winner ?? getWinner(votes),
-              municipalities: result.municipalities ?? {},
-              municipalityPaint: result.municipalityPaint ?? {},
+              municipalities:
+                result.municipalities ?? municipalityPayload.municipalities ?? {},
+              municipalityPaint:
+                result.municipalityPaint ?? municipalityPayload.municipalityPaint ?? {},
               usesMunicipalities:
-                Object.keys(result.municipalityPaint ?? {}).length > 0,
+                Object.keys(result.municipalityPaint ?? municipalityPayload.municipalityPaint ?? {}).length > 0,
+              excluded: Boolean(result.excluded),
             };
           }
           setResults(normalized);
@@ -3116,6 +3165,7 @@ export function ElectionSimulator({
             initialPaint={results[selectedStateInfo.uf]?.municipalityPaint ?? {}}
             initialMunicipalities={results[selectedStateInfo.uf]?.municipalities ?? {}}
             scenarioKey={loadedScenario?.municipalityResultStrategy}
+            electionRound={round}
             onClose={() => setStateDialog(null)}
             onSave={(paint, municipalities) =>
               handleMunicipalitySave(selectedStateInfo.uf, paint, municipalities)
